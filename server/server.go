@@ -137,7 +137,6 @@ func closeStorage() error {
 		if err != nil {
 			return err
 		}
-		return storage.ExportSnapshotIndex()
 	}
 	return nil
 }
