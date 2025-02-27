@@ -25,32 +25,32 @@
 
 ---
 
-## 🎉 特 性
+## 🎉 Feature
 
 - 支持多种内置的数据结构
-- 支持数据安全 IP 白名单访问功能
 - 高吞吐量、低延迟、高效批量数据写入
 - 支持磁盘数据存储和磁盘垃圾数据回收
 - 支持磁盘数据静态加密和静态数据压缩
+- 支持 IP 白名单功能保障数据的安全访问
 - 支持通过基于 RESTful API 协议操作数据
 
 ---
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-使用容器管理工具可以快速部署 [`wiredb:latest`](https://hub.docker.com/r/auula/wiredb) 镜像来测试 WireDB 提供的服务。只需运行以下命令，即可拉取 WireDB 镜像并启动一个容器运行 WireDB 服务：
+使用 Docker 可以快速部署 [`wiredb:latest`](https://hub.docker.com/r/auula/wiredb) 的镜像来测试 WireDB 提供的服务，运行以下命令即可拉取 WireDB 镜像：
 
 ```bash
 docker pull auula/wiredb:v1.0.0
 ```
 
-运行 WireDB 镜像启动容器服务并且映射端口到外部主机网络，如何下面命令：
+运行 WireDB 镜像启动容器服务，并且映射端口到外部主机网络，执行下面的命令：
 
 ```bash
 docker run -p 2668:2668 auula/wiredb:v1.0.0
 ```
 
-注意通过 RESTful API HTTP 协议操作数据时请在 HTTP 请求头中添加 `Auth-Token: xxxx` 访问密码。此默认访问密码为 WireDB 进程自动生成的，需要通过查看容器运行输出的日志信息获得，命令如下：
+WireDB 提供使用 RESTful API 的方式进行数据交互，理论上任意具备 HTTP 协议的客户端都支持访问和操作 WireDB 服务实例。在调用 RESTful API 时需要在请求头中添加 `Auth-Token` 进行鉴权，该密钥由 WireDB 进程自动生成，可通过容器运行时日志获取，使用以下命令查看启动日志：
 
 ```bash
 root@2c2m:~# docker logs 46ae91bc73a6
@@ -69,6 +69,67 @@ root@2c2m:~# docker logs 46ae91bc73a6
 [WIREDB:C] 2025/02/27 10:07:01 [INFO]	File system setup completed successfully
 [WIREDB:C] 2025/02/27 10:07:01 [INFO]	HTTP server started at http://172.0.0.1:2668 🚀
 ```
+
+---
+
+## 🕹️ RESTful API 
+
+目前 WireDB 服务对外提供数据交互接口是基于 HTTP 协议的 RESTful API ，只需要通过支持  `HTTP` 协议客户端软件就可以进行数据操作。这里推荐使用 `curl` 软件进行数据交互操作，WireDB 内部提供了多种数据结构抽象，例如 Table 、List 、ZSet 、Set 、Number 、Text 类型，这些数据类型对应着常见的业务代码所需使用的数据结构，这里以 Table 类型结构为例进行 RESTful API 数据交互的演示。
+
+
+Table 结构类似于 JSON 及任何有映射关系的半结构化数据，例如编程语言中的 struct 和 class 字段都可以使用 Table 进行存储，下面是一个 Table 结构 JSON 抽象：
+
+```json
+{
+    "table": {
+        "is_valid": false,
+        "items": [
+            {
+                "id": 1,
+                "name": "Item 1"
+            },
+            {
+                "id": 2,
+                "name": "Item 2"
+            }
+        ],
+        "meta": {
+            "version": "2.0",
+            "author": "Leon Ding"
+        }
+    },
+    "ttl": 120
+}
+```
+
+下面是 curl 进行数据存储操作的例子，注意存储使用 HTTP 协议的 PUT 方法进行操作，使用 PUT 方法会直接创建新数据版本覆盖掉旧的数据版本，命令如下：
+
+```bash
+curl -X PUT http://localhost:2668/table/key-01 -v \
+     -H "Content-Type: application/json" \
+     -H "Auth-Token: T9EHAvi5dcIpPK9G#ADlVj4NB" \
+     --data @tests/table.json
+```
+
+
+---
+
+## 🧪 Benchmark Test
+
+由于底层存储引擎是以 Append-Only Log 的方式将所有的操作写入到数据文件中，所以这里给出的测试用例报告，是针对的其核心文件系统 [`vfs`](./vfs/) 包的写入性能测试的结果。运行测试代码的硬件设备配置信息为（Intel i5-7360U, 8GB LPDDR3 RAM），写入基准测试结果如下：
+
+```bash
+$: go test -benchmem -run=^$ -bench ^BenchmarkVFSWrite$ github.com/auula/wiredkv/vfs
+goos: darwin
+goarch: amd64
+pkg: github.com/auula/wiredkv/vfs
+cpu: Intel(R) Core(TM) i5-7360U CPU @ 2.30GHz
+BenchmarkVFSWrite-4   	  130216	      9682 ns/op	    1757 B/op	      44 allocs/op
+PASS
+ok  	github.com/auula/wiredkv/vfs	2.544s
+```
+
+在项目根目录下有一个 [`tools.sh`](./tools.sh) 的工具脚本文件，可以快速帮助完成各项辅助工作。
 
 ---
 

@@ -73,16 +73,16 @@ type indexMap struct {
 
 // LogStructuredFS represents the virtual file storage system.
 type LogStructuredFS struct {
-	mu          sync.RWMutex
-	offset      uint64
-	regionID    uint64
-	directory   string
-	indexs      []*indexMap
-	active      *os.File
-	regions     map[uint64]*os.File
-	gcstate     GC_STATE
-	gcdone      chan struct{}
-	dirtyRegion []*os.File
+	mu           sync.RWMutex
+	offset       uint64
+	regionID     uint64
+	directory    string
+	indexs       []*indexMap
+	active       *os.File
+	regions      map[uint64]*os.File
+	gcstate      GC_STATE
+	gcdone       chan struct{}
+	dirtyRegions []*os.File
 }
 
 // PutSegment inserts a Segment record into the LogStructuredFS virtual file system.
@@ -460,7 +460,7 @@ func (lfs *LogStructuredFS) StartRegionGC(cycle_second time.Duration) {
 				}
 
 				// Execute the garbage collection logic.
-				err := lfs.cleanupDirtyRegion()
+				err := lfs.cleanupDirtyRegions()
 				if err != nil {
 					clog.Warnf("failed to compress dirty region: %s", err)
 				}
@@ -544,6 +544,11 @@ func (lfs *LogStructuredFS) CloseFS() error {
 	for _, file := range lfs.regions {
 		err := utils.FlushToDisk(file)
 		if err != nil {
+			// In-memory indexes must be persisted
+			inner := lfs.ExportSnapshotIndex()
+			if inner != nil {
+				return fmt.Errorf("failed to close LogStructuredFS: %w", errors.Join(err, inner))
+			}
 			return fmt.Errorf("failed to close region file: %w", err)
 		}
 	}
@@ -1065,7 +1070,7 @@ func serializedSegment(seg *Segment) ([]byte, error) {
 // 7. Note: The key point is reverse scanning. Use keys from the disk data files to locate and compare records in memory.
 // 8. If the in-memory index is used to locate records, it becomes impossible to determine if a file has been fully scanned.
 // 9. This is because records in the in-memory index may be distributed across multiple data files on disk.
-func (lfs *LogStructuredFS) cleanupDirtyRegion() error {
+func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 	lfs.mu.Lock()
 	defer lfs.mu.Unlock()
 
@@ -1083,15 +1088,15 @@ func (lfs *LogStructuredFS) cleanupDirtyRegion() error {
 
 		// find 40% dirty region
 		for i := 0; i < 4 && i < len(regionIds); i++ {
-			lfs.dirtyRegion = append(lfs.dirtyRegion, lfs.regions[regionIds[i]])
+			lfs.dirtyRegions = append(lfs.dirtyRegions, lfs.regions[regionIds[i]])
 		}
 
 		// Cleanup dirty region
 		defer func() {
-			lfs.dirtyRegion = nil
+			lfs.dirtyRegions = nil
 		}()
 
-		for _, fd := range lfs.dirtyRegion {
+		for _, fd := range lfs.dirtyRegions {
 			finfo, err := fd.Stat()
 			if err != nil {
 				return err
