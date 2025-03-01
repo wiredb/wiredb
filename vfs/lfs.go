@@ -460,7 +460,7 @@ func (lfs *LogStructuredFS) StartRegionGC(cycle_second time.Duration) {
 				}
 
 				// Execute the garbage collection logic.
-				err := lfs.cleanupdirtyRegions()
+				err := lfs.cleanupDirtyRegions()
 				if err != nil {
 					clog.Warnf("failed to compress dirty region: %s", err)
 				}
@@ -1070,7 +1070,7 @@ func serializedSegment(seg *Segment) ([]byte, error) {
 // 7. Note: The key point is reverse scanning. Use keys from the disk data files to locate and compare records in memory.
 // 8. If the in-memory index is used to locate records, it becomes impossible to determine if a file has been fully scanned.
 // 9. This is because records in the in-memory index may be distributed across multiple data files on disk.
-func (lfs *LogStructuredFS) cleanupdirtyRegions() error {
+func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 	lfs.mu.Lock()
 	defer lfs.mu.Unlock()
 
