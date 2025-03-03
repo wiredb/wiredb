@@ -111,7 +111,7 @@ curl -X PUT http://localhost:2668/table/key-01 -v \
      --data @tests/table.json
 ```
 
-获取数据的方式只需要将 HTTP 的请求改为 GET 方式就获取 Key 相应的存储记录，命令如下：
+获取数据的方式只需要将 HTTP 的请求改为 GET 方式就会获取得 Key 相应的存储记录，命令如下：
 
 ```bash
 curl -X GET http://localhost:2668/table/key-01 -v \
