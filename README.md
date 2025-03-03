@@ -111,14 +111,14 @@ curl -X PUT http://localhost:2668/table/key-01 -v \
      --data @tests/table.json
 ```
 
-获取数据的方式只需要将 HTTP 的请求改为 GET 方式就获取 Key 响应的存储记录，命令如下：
+获取数据的方式只需要将 HTTP 的请求改为 GET 方式就获取 Key 相应的存储记录，命令如下：
 
 ```bash
 curl -X GET http://localhost:2668/table/key-01 -v \
 -H "Auth-Token: T9EHAvi5dcIpPK9G#ADlVj4NB" 
 ```
 
-删除对于数据记录，只需要将 HTTP 的请求改为 DELETE 的方式即可，命令如下：
+删除对应的数据记录，只需要将 HTTP 的请求改为 DELETE 的方式即可，命令如下：
 
 ```bash
 curl -X DELETE http://localhost:2668/table/key-01 -v \
