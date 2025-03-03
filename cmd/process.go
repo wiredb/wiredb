@@ -1,4 +1,4 @@
-// Copyright 2022 Leon Ding <ding@ibyte.me> https://wiredkv.github.io
+// Copyright 2022 Leon Ding <ding@ibyte.me> https://wiredb.github.io
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,11 +25,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/auula/wiredkv/clog"
-	"github.com/auula/wiredkv/conf"
-	"github.com/auula/wiredkv/server"
-	"github.com/auula/wiredkv/utils"
-	"github.com/auula/wiredkv/vfs"
+	"github.com/auula/wiredb/clog"
+	"github.com/auula/wiredb/conf"
+	"github.com/auula/wiredb/server"
+	"github.com/auula/wiredb/utils"
+	"github.com/auula/wiredb/vfs"
 	"github.com/gookit/color"
 )
 

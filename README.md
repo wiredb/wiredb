@@ -9,13 +9,13 @@
 ---
 
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/auula/wiredb)](https://goreportcard.com/report/github.com/auula/wiredb)
+[![Go Report Card](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=flat)](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=flat)
 [![Go Reference](https://pkg.go.dev/badge/github.com/auula/wiredb.svg)](https://pkg.go.dev/github.com/auula/wiredb)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/55bc449808ca4d0c80c0122f170d7313)](https://app.codacy.com/gh/auula/wiredb/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
-[![codecov](https://codecov.io/gh/wiredb/wiredb/graph/badge.svg?token=ekQ3KzyXtm)](https://codecov.io/gh/wiredb/wiredb)
-[![DeepSource](https://app.deepsource.com/gh/wiredb/wiredb.svg/?label=active+issues&show_trend=true&token=sJBjq88ZxurlEgiOu_ukQ3O_)](https://app.deepsource.com/gh/wiredb/wiredb/?ref=repository-badge)
+[![codecov](https://codecov.io/gh/auula/wiredb/graph/badge.svg?token=xTcPzdLFkJ)](https://codecov.io/gh/auula/wiredb)
+[![DeepSource](https://app.deepsource.com/gh/auula/wiredb.svg/?label=active+issues&show_trend=true&token=sJBjq88ZxurlEgiOu_ukQ3O_)](https://app.deepsource.com/gh/auula/wiredb/?ref=repository-badge)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![release](https://img.shields.io/github/release/wiredb/wiredb.svg)](https://github.com/wiredb/wiredb/releases)
+[![release](https://img.shields.io/github/release/auula/wiredb.svg)](https://github.com/auula/wiredb/releases)
 
 
 
@@ -70,6 +70,8 @@ root@2c2m:~# docker logs 46ae91bc73a6
 [WIREDB:C] 2025/02/27 10:07:01 [INFO]	HTTP server started at http://172.0.0.1:2668 🚀
 ```
 
+如果计划将 WireDB 作为长期运行的服务，推荐直接使用主流 Linux 发行版来运行而非容器技术。采用裸机 Linux 部署 WireDB 服务，可手动优化存储引擎参数，以获得更稳定的性能和更高的资源利用率，具体参数配置建议查看[官方文档](https://docs.wiredb.org)。
+
 ---
 
 ## 🕹️ RESTful API 
@@ -102,7 +104,7 @@ Table 结构类似于 JSON 及任何有映射关系的半结构化数据，例�
 }
 ```
 
-下面是 curl 进行数据存储操作的例子，注意存储使用 HTTP 协议的 PUT 方法进行操作，使用 PUT 方法会直接创建新数据版本覆盖掉旧的数据版本，命令如下：
+下面是 curl 进行数据存储操作的例子，由于是 RESTful API 设计风格，需要在 HTTP 的请求路径 URL 加上数据类型信息。注意存储使用 HTTP 协议的 PUT 方法进行操作，使用 PUT 方法会直接创建新数据版本覆盖掉旧的数据版本，命令如下：
 
 ```bash
 curl -X PUT http://localhost:2668/table/key-01 -v \
@@ -110,6 +112,22 @@ curl -X PUT http://localhost:2668/table/key-01 -v \
      -H "Auth-Token: T9EHAvi5dcIpPK9G#ADlVj4NB" \
      --data @tests/table.json
 ```
+
+获取数据的方式只需要将 HTTP 的请求改为 GET 方式就会获取得 Key 相应的存储记录，命令如下：
+
+```bash
+curl -X GET http://localhost:2668/table/key-01 -v \
+-H "Auth-Token: T9EHAvi5dcIpPK9G#ADlVj4NB" 
+```
+
+删除对应的数据记录，只需要将 HTTP 的请求改为 DELETE 的方式即可，命令如下：
+
+```bash
+curl -X DELETE http://localhost:2668/table/key-01 -v \
+-H "Auth-Token: T9EHAvi5dcIpPK9G#ADlVj4NB" 
+```
+
+更为复杂的查询和复杂更新操作，将在后续的版本更新中添加支持。其他数据结构类型操作代码示例请查看[官方文档](https://docs.wiredb.org)。
 
 
 ---
@@ -130,32 +148,6 @@ ok  	github.com/auula/wiredkv/vfs	2.544s
 ```
 
 在项目根目录下有一个 [`tools.sh`](./tools.sh) 的工具脚本文件，可以快速帮助完成各项辅助工作。
-
----
-
-推荐使用 Linux 发型版本来运行 WireDB 服务，WireDB 服务进程依赖配置文件中的参数，在运行 WireDB 服务之前将下面的配置内容写到 `config.yaml` 中：
-
-```yaml
-port: 2668                              # 服务 HTTP 协议端口
-mode: "std"                             # 默认为 std 标准库
-path: "/tmp/wiredb"                     # 数据库文件存储目录
-auth: "Are we wide open to the world?"  # 访问 HTTP 协议的秘密
-logpath: "/tmp/wiredb/out.log"          # WireDB 在运行时程序产生的日志存储文件
-debug: false        # 是否开启 debug 模式
-region:             # 数据区
-    enable: true    # 是否开启数据压缩功能
-    second: 1800    # 默认垃圾回收器执行周期单位为秒
-    threshold: 3    # 默认个数据文件大小，单位 GB
-encryptor:          # 是否开启静态数据加密功能
-    enable: false
-    secret: "your-static-data-secret!"
-compressor:         # 是否开启静态数据压缩功能
-    enable: false
-allowip:            # 白名单 IP 列表，可以去掉这个字段，去掉之后白名单就不会开启
-    - 192.168.31.221
-    - 192.168.101.225
-    - 127.0.0.1
-```
 
 ---
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Leon Ding <ding@ibyte.me> https://wiredkv.github.io
+// Copyright 2022 Leon Ding <ding@ibyte.me> https://wiredb.github.io
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/auula/wiredkv/cmd"
+import "github.com/auula/wiredb/cmd"
 
 func main() {
 	cmd.StartApp()

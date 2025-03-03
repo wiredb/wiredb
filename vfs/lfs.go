@@ -1,3 +1,17 @@
+// Copyright 2022 Leon Ding <ding@ibyte.me> https://wiredb.github.io
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+
+//     http://www.apache.org/licenses/LICENSE-2.0
+
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package vfs
 
 import (
@@ -17,8 +31,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/auula/wiredkv/clog"
-	"github.com/auula/wiredkv/utils"
+	"github.com/auula/wiredb/clog"
+	"github.com/auula/wiredb/utils"
+	"github.com/robfig/cron/v3"
 	"github.com/spaolacci/murmur3"
 )
 
@@ -81,7 +96,7 @@ type LogStructuredFS struct {
 	active       *os.File
 	regions      map[uint64]*os.File
 	gcstate      GC_STATE
-	gcdone       chan struct{}
+	cronJob      *cron.Cron
 	dirtyRegions []*os.File
 }
 
@@ -238,21 +253,22 @@ func (lfs *LogStructuredFS) UpdateSegmentWithCAS(key string, expected uint64, ne
 		return fmt.Errorf("inode index for %d not found", inum)
 	}
 
+	bytes, err := serializedSegment(newseg)
+	if err != nil {
+		return err
+	}
+
+	// 更新数据时使用锁
+	lfs.mu.Lock()
+	err = appendToActiveRegion(lfs.active, bytes)
+	lfs.mu.Unlock()
+	if err != nil {
+		return fmt.Errorf("failed to update data: %w", err)
+	}
+
 	// MVCC: version is not modified by another thread
 	if atomic.CompareAndSwapUint64(&inode.mvcc, expected, expected+1) {
-		bytes, err := serializedSegment(newseg)
-		if err != nil {
-			return err
-		}
-		// 更新数据时使用锁
-		lfs.mu.Lock()
-		err = appendToActiveRegion(lfs.active, bytes)
-		lfs.mu.Unlock()
-		if err != nil {
-			return fmt.Errorf("failed to update data: %w", err)
-		}
-
-		// 修改 inode 信息时使用写锁
+		// 一次性原子更新 inode 指针
 		atomic.StoreUint64(&inode.Position, atomic.LoadUint64(&lfs.offset))
 		atomic.StoreUint64(&inode.CreatedAt, newseg.CreatedAt)
 		atomic.StoreUint64(&inode.ExpiredAt, newseg.ExpiredAt)
@@ -261,16 +277,6 @@ func (lfs *LogStructuredFS) UpdateSegmentWithCAS(key string, expected uint64, ne
 
 		// 使用原子操作更新 offset
 		atomic.AddUint64(&lfs.offset, uint64(newseg.Size()))
-
-		// 检查并创建新的区域
-		if atomic.LoadUint64(&lfs.offset) >= uint64(regionThreshold) {
-			lfs.mu.Lock()
-			err := lfs.createActiveRegion()
-			lfs.mu.Unlock()
-			if err != nil {
-				return err
-			}
-		}
 
 		return nil
 	}
@@ -437,55 +443,54 @@ func (lfs *LogStructuredFS) SetEncryptor(encryptor Encryptor, secret []byte) err
 	return transformer.SetEncryptor(encryptor, secret)
 }
 
-func (lfs *LogStructuredFS) StartRegionGC(cycle_second time.Duration) {
-	// Return if the garbage collector is not in the initial state.
+// StartRegionGC 使用 robfig/cron 调度垃圾回收
+func (lfs *LogStructuredFS) StartRegionGC(schedule string) {
+	// 确保垃圾回收处于初始状态
 	if lfs.gcstate != GC_INIT {
 		return
 	}
 
-	// Create a ticker that triggers at the specified interval.
-	ticker := time.NewTicker(cycle_second)
-	// Channel to control the graceful exit of the garbage collection goroutine.
-	lfs.gcdone = make(chan struct{}, 1)
+	// 初始化 cron 任务，支持秒级调度
+	lfs.cronJob = cron.New(cron.WithSeconds())
 
-	// Start a goroutine to continuously receive messages from the ticker channel.
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				// Skip this cycle if the previous garbage collection is still running.
-				if lfs.gcstate == GC_ACTIVE {
-					continue
-				}
-
-				// Execute the garbage collection logic.
-				err := lfs.cleanupDirtyRegions()
-				if err != nil {
-					clog.Warnf("failed to compress dirty region: %s", err)
-				}
-
-				// Update the state to indicate garbage collection has stopped.
-				lfs.gcstate = GC_INACTIVE
-			case <-lfs.gcdone:
-				// If garbage collection is running, delay its exit to prevent dirty data
-				// From being generated due to interrupted operations.
-				for lfs.gcstate == GC_ACTIVE {
-					time.Sleep(3 * time.Second)
-				}
-				// Reset the garbage collector state to the initial state.
-				lfs.gcstate = GC_INIT
-				return
-			}
+	// 添加定时任务
+	lfs.cronJob.AddFunc(schedule, func() {
+		// 如果上一次 GC 仍在运行，则跳过
+		if lfs.gcstate == GC_ACTIVE {
+			return
 		}
-	}()
+
+		// 设置状态为 GC_ACTIVE
+		lfs.gcstate = GC_ACTIVE
+		err := lfs.cleanupDirtyRegions()
+		if err != nil {
+			lfs.gcstate = GC_INACTIVE
+			clog.Warnf("failed to compress dirty region: %s", err)
+		}
+
+		// 任务完成后设置为 GC_INACTIVE
+		lfs.gcstate = GC_INACTIVE
+	})
+
+	// 启动定时任务
+	lfs.cronJob.Start()
 }
 
+// StopRegionGC 关闭垃圾回收
 func (lfs *LogStructuredFS) StopRegionGC() {
-	if lfs.gcstate == GC_ACTIVE || lfs.gcstate == GC_INACTIVE {
-		lfs.gcdone <- struct{}{}
-		close(lfs.gcdone)
+	// 停止 cron 任务
+	if lfs.cronJob != nil {
+		lfs.cronJob.Stop()
 	}
+
+	// 如果 GC 仍在运行，等待其结束
+	for lfs.gcstate == GC_ACTIVE {
+		time.Sleep(3 * time.Second)
+	}
+
+	// 重置状态
+	lfs.gcstate = GC_INIT
+	lfs.cronJob = nil
 }
 
 // GCState returns the current garbage collection (GC) state
@@ -1071,12 +1076,6 @@ func serializedSegment(seg *Segment) ([]byte, error) {
 // 8. If the in-memory index is used to locate records, it becomes impossible to determine if a file has been fully scanned.
 // 9. This is because records in the in-memory index may be distributed across multiple data files on disk.
 func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
-	lfs.mu.Lock()
-	defer lfs.mu.Unlock()
-
-	// 修改 GC 的状态为运行状态
-	lfs.gcstate = GC_ACTIVE
-
 	if len(lfs.regions) >= 5 {
 		var regionIds []uint64
 		for v := range lfs.regions {
@@ -1177,8 +1176,8 @@ func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 }
 
 func isValid(mu *sync.RWMutex, seg *Segment, inode *INode) bool {
-	mu.Lock()
-	defer mu.Unlock()
+	mu.RLock()
+	defer mu.RUnlock()
 	return !seg.IsTombstone() &&
 		seg.CreatedAt == inode.CreatedAt &&
 		(seg.ExpiredAt == 0 || uint64(time.Now().Unix()) < seg.ExpiredAt)

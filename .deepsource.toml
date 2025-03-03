@@ -7,4 +7,4 @@ name = "shell"
 name = "go"
 
   [analyzers.meta]
-  import_root = "github.com/wiredb/wiredb"
+  import_root = "github.com/auula/wiredb"

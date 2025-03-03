@@ -1,3 +1,17 @@
+// Copyright 2022 Leon Ding <ding@ibyte.me> https://wiredb.github.io
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+
+//     http://www.apache.org/licenses/LICENSE-2.0
+
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package conf
 
 import (
@@ -5,7 +19,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -82,7 +95,7 @@ func TestSavedAsConfig(t *testing.T) {
 		Password: "password@123",
 		Region: Region{
 			Enable:    true,
-			Second:    15000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -125,7 +138,7 @@ func TestSavedConfig(t *testing.T) {
 		Password: "password@123",
 		Region: Region{
 			Enable:    true,
-			Second:    15000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -251,7 +264,7 @@ func TestServerOptions_ToString(t *testing.T) {
 		Password: "password@123",
 		Region: Region{
 			Enable:    true,
-			Second:    15000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -294,7 +307,7 @@ func TestVaildated(t *testing.T) {
 		Password: "securepassword",
 		Region: Region{
 			Enable:    true,
-			Second:    18000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -314,7 +327,7 @@ func TestVaildated(t *testing.T) {
 		Password: "securepassword",
 		Region: Region{
 			Enable:    true,
-			Second:    18000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -338,7 +351,7 @@ func TestVaildated(t *testing.T) {
 		Password: "securepassword",
 		Region: Region{
 			Enable:    true,
-			Second:    18000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -361,7 +374,7 @@ func TestVaildated(t *testing.T) {
 		Password: "",
 		Region: Region{
 			Enable:    true,
-			Second:    18000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -383,7 +396,7 @@ func TestVaildated(t *testing.T) {
 		Password: "securepassword",
 		Region: Region{
 			Enable:    true,
-			Second:    18000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -407,7 +420,7 @@ func TestVaildated(t *testing.T) {
 		Password: "securepassword",
 		Region: Region{
 			Enable:    true,
-			Second:    18000,
+			Schedule:  "0 0 3 * * *",
 			Threshold: 3,
 		},
 		Encryptor: Encryptor{
@@ -467,7 +480,7 @@ func TestMarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the marshaled data is correct
-	expectedJSON := `{"port":8080,"path":"/tmp/myconfig","debug":false,"logpath":"","auth":"testpassword","region":{"enable":false,"second":0,"threshold":0},"encryptor":{"enable":false,"secret":""},"compressor":{"enable":false},"allowip":null}`
+	expectedJSON := `{"port":8080,"path":"/tmp/myconfig","debug":false,"logpath":"","auth":"testpassword","region":{"enable":false,"cron":"","threshold":0},"encryptor":{"enable":false,"secret":""},"compressor":{"enable":false},"allowip":null}`
 	assert.JSONEq(t, expectedJSON, string(data))
 }
 
@@ -494,7 +507,7 @@ func TestServerOptionsMethods(t *testing.T) {
 	opt := &ServerOptions{
 		Compressor: Compressor{Enable: true},
 		Encryptor:  Encryptor{Enable: true, Secret: "secure-key-12345678"},
-		Region:     Region{Enable: true, Second: 1800},
+		Region:     Region{Enable: true, Schedule: "0 0 3 * * *"},
 	}
 
 	// 1. 测试 IsCompressionEnabled 方法
@@ -514,8 +527,7 @@ func TestServerOptionsMethods(t *testing.T) {
 
 	// 4. 测试 RegionGCInterval 方法
 	t.Run("Test RegionGCInterval", func(t *testing.T) {
-		expectedDuration := 1800 * time.Second // 1800 秒转换为 time.Duration
-		assert.Equal(t, expectedDuration, opt.RegionGCInterval())
+		assert.Equal(t, "0 0 3 * * *", opt.RegionGCInterval())
 	})
 
 	// 5. 测试 Secret 方法
