@@ -44,6 +44,14 @@ func init() {
 	root.NoRoute(Error404Handler)
 	root.GET("/", GetHealthController)
 
+	query := root.Group("/query")
+	{
+		// 简单的查询使用 GET
+		query.GET("/:key", QueryController)
+		// 后续复杂查询使用 POST
+	}
+
+	// POST 一律作为更新操作来 CAS，未来可能会添加 Batch 原子写
 	set := root.Group("/set")
 	{
 		set.GET("/:key", GetSetController)

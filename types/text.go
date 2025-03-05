@@ -15,6 +15,7 @@
 package types
 
 import (
+	"encoding/json"
 	"strings"
 
 	"gopkg.in/mgo.v2/bson"
@@ -56,4 +57,8 @@ func (text *Text) Clear() {
 
 func (text Text) ToBSON() ([]byte, error) {
 	return bson.Marshal(text)
+}
+
+func (text Text) ToJSON() ([]byte, error) {
+	return json.Marshal(text.Content)
 }

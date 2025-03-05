@@ -15,6 +15,7 @@
 package types
 
 import (
+	"encoding/json"
 	"sort"
 
 	"gopkg.in/mgo.v2/bson"
@@ -111,4 +112,8 @@ func (z *ZSet) Clear() {
 
 func (zs ZSet) ToBSON() ([]byte, error) {
 	return bson.Marshal(zs.ZSet)
+}
+
+func (zs ZSet) ToJSON() ([]byte, error) {
+	return json.Marshal(zs.ZSet)
 }

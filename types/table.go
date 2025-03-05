@@ -15,6 +15,8 @@
 package types
 
 import (
+	"encoding/json"
+
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -100,4 +102,8 @@ func (tab *Table) Size() int {
 
 func (tab Table) ToBSON() ([]byte, error) {
 	return bson.Marshal(tab)
+}
+
+func (tab Table) ToJSON() ([]byte, error) {
+	return json.Marshal(tab.Table)
 }

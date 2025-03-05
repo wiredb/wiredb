@@ -15,6 +15,7 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -84,4 +85,8 @@ func (d *Double) String() string {
 // BSON 序列化
 func (d Double) ToBSON() ([]byte, error) {
 	return bson.Marshal(d)
+}
+
+func (d Double) ToJSON() ([]byte, error) {
+	return json.Marshal(d.Value)
 }

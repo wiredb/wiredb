@@ -15,6 +15,7 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 
 	"gopkg.in/mgo.v2/bson"
@@ -82,4 +83,8 @@ func (ls *List) Clear() {
 
 func (ls List) ToBSON() ([]byte, error) {
 	return bson.Marshal(ls)
+}
+
+func (ls List) ToJSON() ([]byte, error) {
+	return json.Marshal(ls.List)
 }

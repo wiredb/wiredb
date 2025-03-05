@@ -15,6 +15,7 @@
 package types
 
 import (
+	"encoding/json"
 	"sync/atomic"
 
 	"gopkg.in/mgo.v2/bson"
@@ -33,6 +34,10 @@ func NewNumber(num int64) *Number {
 // ToBSON 将 Number 序列化为 BSON
 func (num Number) ToBSON() ([]byte, error) {
 	return bson.Marshal(num)
+}
+
+func (num Number) ToJSON() ([]byte, error) {
+	return json.Marshal(num.Value)
 }
 
 // Add 以原子方式增加值

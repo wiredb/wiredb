@@ -35,6 +35,16 @@ const (
 	Unknown
 )
 
+var KindToString = map[Kind]string{
+	Set:     "set",
+	ZSet:    "zset",
+	List:    "list",
+	Text:    "text",
+	Table:   "table",
+	Number:  "number",
+	Unknown: "unknown",
+}
+
 // | DEL 1 | KIND 1 | EAT 8 | CAT 8 | KLEN 8 | VLEN 8 | KEY ? | VALUE ? | CRC32 4 |
 type Segment struct {
 	Tombstone int8
@@ -186,7 +196,7 @@ func (s *Segment) ToNumber() (*types.Number, error) {
 func (s *Segment) TTL() int64 {
 	now := uint64(time.Now().UnixNano())
 	if s.ExpiredAt > 0 && s.ExpiredAt > now {
-		return int64(s.ExpiredAt - now)
+		return int64(s.ExpiredAt-now) / int64(time.Second)
 	}
 	return -1
 }
@@ -211,4 +221,51 @@ func toKind(data Serializable) (Kind, error) {
 	default:
 		return Unknown, errors.New("unknown data type")
 	}
+}
+
+func (s *Segment) ToBSON() []byte {
+	return s.Value
+}
+
+func (s *Segment) ToJSON() ([]byte, error) {
+	switch s.Type {
+	case Set:
+		set, err := s.ToSet()
+		if err != nil {
+			return nil, err
+		}
+		return set.ToJSON()
+	case ZSet:
+		zset, err := s.ToZSet()
+		if err != nil {
+			return nil, err
+		}
+		return zset.ToJSON()
+	case List:
+		list, err := s.ToList()
+		if err != nil {
+			return nil, err
+		}
+		return list.ToJSON()
+	case Text:
+		text, err := s.ToText()
+		if err != nil {
+			return nil, err
+		}
+		return text.ToJSON()
+	case Number:
+		num, err := s.ToNumber()
+		if err != nil {
+			return nil, err
+		}
+		return num.ToJSON()
+	case Table:
+		tab, err := s.ToTable()
+		if err != nil {
+			return nil, err
+		}
+		return tab.ToJSON()
+	}
+
+	return nil, errors.New("unknown data type")
 }

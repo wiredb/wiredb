@@ -14,7 +14,11 @@
 
 package types
 
-import "gopkg.in/mgo.v2/bson"
+import (
+	"encoding/json"
+
+	"gopkg.in/mgo.v2/bson"
+)
 
 type Set struct {
 	Set map[string]bool `json:"set" bson:"set" binding:"required"`
@@ -56,4 +60,8 @@ func (s *Set) Clear() {
 
 func (s Set) ToBSON() ([]byte, error) {
 	return bson.Marshal(s.Set)
+}
+
+func (s Set) ToJSON() ([]byte, error) {
+	return json.Marshal(s.Set)
 }

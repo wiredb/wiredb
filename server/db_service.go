@@ -410,6 +410,23 @@ func DeleteSetController(ctx *gin.Context) {
 	})
 }
 
+func QueryController(ctx *gin.Context) {
+	version, seg, err := storage.FetchSegment(ctx.Param("key"))
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"message": "key data not found.",
+		})
+		return
+	}
+
+	ctx.IndentedJSON(http.StatusOK, gin.H{
+		"type": vfs.KindToString[seg.Type],
+		"bson": seg.ToBSON(),
+		"ttl":  seg.TTL(),
+		"mvcc": version,
+	})
+}
+
 func GetHealthController(ctx *gin.Context) {
 	health, err := newHealth(storage.GetDirectory())
 	if err != nil {
