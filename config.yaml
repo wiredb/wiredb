@@ -3,17 +3,17 @@ mode: "std"                             # 默认为 std 标准库，另外可以
 path: "/tmp/wiredb"                     # 数据库文件存储目录
 auth: "Are we wide open to the world?"  # 访问 HTTP 协议的秘密
 logpath: "/tmp/wiredb/out.log"          # WireDB 在运行时程序产生的日志存储文件
-debug: false        # 是否开启 debug 模式
-region:             # 数据区
-    enable: true    # 是否开启数据压缩功能
-    second: 1800    # 默认垃圾回收器执行周期单位为秒
-    threshold: 3    # 默认个数据文件大小，单位 GB
-encryptor:          # 是否开启静态数据加密功能
+debug: false                            # 是否开启 debug 模式
+region:                                 # 数据区
+    enable: true                        # 是否开启数据压缩功能
+    cron: "0 0 3 * * *"                 # 垃圾回收器执行周期改为 cron 的格式
+    threshold: 3                        # 默认个数据文件大小，单位 GB
+encryptor:                              # 是否开启静态数据加密功能
     enable: false
     secret: "your-static-data-secret!"
-compressor:         # 是否开启静态数据压缩功能
+compressor:                             # 是否开启静态数据压缩功能
     enable: false
-allowip:            # 白名单 IP 列表，可以去掉这个字段，去掉之后白名单就不会开启
+allowip:                                # 白名单 IP 列表，可以去掉这个字段，去掉之后白名单就不会开启
     - 192.168.31.221
     - 192.168.101.225
     - 127.0.0.1

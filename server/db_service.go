@@ -43,7 +43,7 @@ func GetListController(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
+	ctx.IndentedJSON(http.StatusOK, gin.H{
 		"list": list.List,
 	})
 }
@@ -107,7 +107,7 @@ func GetTableController(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
+	ctx.IndentedJSON(http.StatusOK, gin.H{
 		"table": table.Table,
 	})
 }
@@ -171,7 +171,7 @@ func GetZsetController(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
+	ctx.IndentedJSON(http.StatusOK, gin.H{
 		"list": zset.ZSet,
 	})
 }
@@ -235,7 +235,7 @@ func GetTextController(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
+	ctx.IndentedJSON(http.StatusOK, gin.H{
 		"text": text.Content,
 	})
 }
@@ -299,7 +299,7 @@ func GetNumberController(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
+	ctx.IndentedJSON(http.StatusOK, gin.H{
 		"number": number.Value,
 	})
 }
@@ -435,7 +435,7 @@ func GetHealthController(ctx *gin.Context) {
 		})
 	}
 
-	ctx.JSON(http.StatusOK, SystemInfo{
+	ctx.IndentedJSON(http.StatusOK, SystemInfo{
 		Version:     version,
 		GCState:     storage.GCState(),
 		KeyCount:    storage.KeysCount(),
