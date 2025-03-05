@@ -649,6 +649,10 @@ func recoveryIndex(fd *os.File, indexs []*indexMap) error {
 				return
 			}
 
+			if inode.ExpiredAt <= uint64(time.Now().UnixNano()) && inode.ExpiredAt != 0 {
+				continue
+			}
+
 			nqueue <- index{inum: inum, inode: inode}
 		}
 	}()
