@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -138,18 +137,6 @@ func runServer() {
 	if err != nil {
 		clog.Failed(err)
 	}
-
-	if fss.BarTotal > 5 {
-		for int(fss.BarPercent) <= int(fss.BarTotal) {
-			percent := fss.BarPercent * 100 / fss.BarTotal
-			bar := "[" + strings.Repeat("=", int(fss.BarPercent)) + strings.Repeat(" ", int(fss.BarTotal-fss.BarPercent)) + "]"
-			// 使用 \r 在同一行刷新
-			fmt.Printf("\r%s %3d%%", bar, percent)
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
-	// 进度完成后换行
-	fmt.Println()
 
 	if conf.Settings.IsCompressionEnabled() {
 		// Set file data to use Snappy compression algorithm
