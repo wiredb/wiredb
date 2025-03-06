@@ -98,6 +98,8 @@ type LogStructuredFS struct {
 	gcstate      GC_STATE
 	cronJob      *cron.Cron
 	dirtyRegions []*os.File
+	BarTotal     uint8
+	BarPercent   uint8
 }
 
 // PutSegment inserts a Segment record into the LogStructuredFS virtual file system.
@@ -432,7 +434,7 @@ func (lfs *LogStructuredFS) recoveryIndex() error {
 	// If the data files are very large and numerous, recovery time increases significantly.
 	// Frequent garbage collection reduces the size of data files and speeds up startup time.
 	// However, frequent garbage collection may negatively impact overall read/write performance.
-	return crashRecoveryAllIndex(lfs.regions, lfs.indexs)
+	return lfs.crashRecoveryAllIndex()
 }
 
 func (lfs *LogStructuredFS) SetCompressor(compressor Compressor) {
@@ -697,9 +699,11 @@ func recoveryIndex(fd *os.File, indexs []*indexMap) error {
 // 4. If DEL is 1, the corresponding entry is deleted from the in-memory index.
 // 5. Otherwise, the disk metadata is reconstructed into the index.
 // | DEL 1 | KIND 1 | EAT 8 | CAT 8 | KLEN 4 | VLEN 4 | KEY ? | VALUE ? | CRC32 4 |
-func crashRecoveryAllIndex(regions map[uint64]*os.File, indexs []*indexMap) error {
+func (lfs *LogStructuredFS) crashRecoveryAllIndex() error {
+	lfs.BarTotal = uint8(len(lfs.regions))
+
 	var regionIds []uint64
-	for v := range regions {
+	for v := range lfs.regions {
 		regionIds = append(regionIds, v)
 	}
 
@@ -708,7 +712,7 @@ func crashRecoveryAllIndex(regions map[uint64]*os.File, indexs []*indexMap) erro
 	})
 
 	for _, regionId := range regionIds {
-		fd, ok := regions[uint64(regionId)]
+		fd, ok := lfs.regions[uint64(regionId)]
 		if !ok {
 			return fmt.Errorf("data file does not exist regions id: %d", regionId)
 		}
@@ -726,7 +730,7 @@ func crashRecoveryAllIndex(regions map[uint64]*os.File, indexs []*indexMap) erro
 				return fmt.Errorf("failed to parse data file segment: %w", err)
 			}
 
-			imap := indexs[inum%uint64(indexShard)]
+			imap := lfs.indexs[inum%uint64(indexShard)]
 			if imap != nil {
 				if segment.IsTombstone() {
 					delete(imap.index, inum)
@@ -754,6 +758,7 @@ func crashRecoveryAllIndex(regions map[uint64]*os.File, indexs []*indexMap) erro
 			}
 		}
 
+		lfs.BarPercent += 1
 	}
 
 	return nil
