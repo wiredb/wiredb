@@ -1,4 +1,4 @@
-// Copyright 2022 Leon Ding <ding@ibyte.me> https://wiredb.github.io
+// Copyright 2022 Leon Ding <ding_ms@outlook.com> https://wiredb.github.io
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ import (
 
 // TestSerializedIndex 测试 serializedIndex 函数
 func TestSerializedIndex(t *testing.T) {
-	// 创建一个测试的 INode
-	inode := &INode{
+	// 创建一个测试的 Inode
+	Inode := &Inode{
 		RegionID:  1234,
 		Position:  5678,
 		Length:    100,
@@ -43,7 +43,7 @@ func TestSerializedIndex(t *testing.T) {
 	expectedLength := 48
 
 	// 调用 serializeIndex
-	result, err := serializedIndex(1001, inode)
+	result, err := serializedIndex(1001, Inode)
 	if err != nil {
 		t.Fatalf("serialized index failed: %v", err)
 	}
@@ -64,20 +64,20 @@ func TestSerializedIndex(t *testing.T) {
 	if inum != 1001 {
 		t.Errorf("expected inum %d, got %d", 1001, inum)
 	}
-	if node.RegionID != inode.RegionID {
-		t.Errorf("expected RegionID %d, got %d", inode.RegionID, node.RegionID)
+	if node.RegionID != Inode.RegionID {
+		t.Errorf("expected RegionID %d, got %d", Inode.RegionID, node.RegionID)
 	}
-	if node.Position != inode.Position {
-		t.Errorf("expected Offset %d, got %d", inode.Position, node.RegionID)
+	if node.Position != Inode.Position {
+		t.Errorf("expected Offset %d, got %d", Inode.Position, node.RegionID)
 	}
-	if node.Length != inode.Length {
-		t.Errorf("expected Length %d, got %d", inode.Length, node.Length)
+	if node.Length != Inode.Length {
+		t.Errorf("expected Length %d, got %d", Inode.Length, node.Length)
 	}
-	if node.ExpiredAt != inode.ExpiredAt {
-		t.Errorf("expected ExpiredAt %d, got %d", inode.ExpiredAt, node.ExpiredAt)
+	if node.ExpiredAt != Inode.ExpiredAt {
+		t.Errorf("expected ExpiredAt %d, got %d", Inode.ExpiredAt, node.ExpiredAt)
 	}
-	if node.CreatedAt != inode.CreatedAt {
-		t.Errorf("expected CreatedAt %d, got %d", inode.CreatedAt, node.CreatedAt)
+	if node.CreatedAt != Inode.CreatedAt {
+		t.Errorf("expected CreatedAt %d, got %d", Inode.CreatedAt, node.CreatedAt)
 	}
 
 }
@@ -148,7 +148,7 @@ func TestReadSegment(t *testing.T) {
 		t.Errorf("expected Value to be %s, but got: %s", string(seg.Value), string(segment.Value))
 	}
 
-	// 校验返回的 inode number (InodeNum)
+	// 校验返回的 Inode number (InodeNum)
 	if inum != InodeNum(string(seg.Key)) {
 		t.Errorf("expected InodeNum to be '%s', but got: %d", seg.Key, inum)
 	}
@@ -495,7 +495,7 @@ func TestVFSOpertions(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, _, err = fss.FetchSegment("key-01")
-	assert.Equal(t, err.Error(), "inode index for 9171687345308829835 not found")
+	assert.Equal(t, err.Error(), "Inode index for 9171687345308829835 not found")
 
 	err = fss.ExportSnapshotIndex()
 	assert.NoError(t, err)

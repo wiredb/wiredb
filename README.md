@@ -41,23 +41,23 @@
 使用 Docker 可以快速部署 [`wiredb:latest`](https://hub.docker.com/r/auula/wiredb) 的镜像来测试 WireDB 提供的服务，运行以下命令即可拉取 WireDB 镜像：
 
 ```bash
-docker pull auula/wiredb:v1.0.0
+docker pull auula/wiredb:latest
 ```
 
 运行 WireDB 镜像启动容器服务，并且映射端口到外部主机网络，执行下面的命令：
 
 ```bash
-docker run -p 2668:2668 auula/wiredb:v1.0.0
+docker run -p 2668:2668 auula/wiredb:latest
 ```
 
 WireDB 提供使用 RESTful API 的方式进行数据交互，理论上任意具备 HTTP 协议的客户端都支持访问和操作 WireDB 服务实例。在调用 RESTful API 时需要在请求头中添加 `Auth-Token` 进行鉴权，该密钥由 WireDB 进程自动生成，可通过容器运行时日志获取，使用以下命令查看启动日志：
 
 ```bash
-root@2c2m:~# docker logs 46ae91bc73a6
+root@2c2m:~# docker logs 66ae91bc73a6
                          _            ____
                  _    __(_)______ ___/ / /
                 | |/|/ / / __/ -_) _  / _ \
-                |__,__/_/_/  \__/\_,_/_.__/  v1.0.0
+                |__,__/_/_/  \__/\_,_/_.__/  v1.0.1
 
   WireDB is a NoSQL database based on Log-structured file system.
   Software License: Apache 2.0  Website: https://wiredb.github.io
@@ -79,7 +79,7 @@ root@2c2m:~# docker logs 46ae91bc73a6
 目前 WireDB 服务对外提供数据交互接口是基于 HTTP 协议的 RESTful API ，只需要通过支持  `HTTP` 协议客户端软件就可以进行数据操作。这里推荐使用 `curl` 软件进行数据交互操作，WireDB 内部提供了多种数据结构抽象，例如 Table 、List 、ZSet 、Set 、Number 、Text 类型，这些数据类型对应着常见的业务代码所需使用的数据结构，这里以 Table 类型结构为例进行 RESTful API 数据交互的演示。
 
 
-Table 结构类似于 JSON 及任何有映射关系的半结构化数据，例如编程语言中的 struct 和 class 字段都可以使用 Table 进行存储，下面是一个 Table 结构 JSON 抽象：
+Table 结构类似于 JSON 及任何有映射关系的半结构化数据，例如编程语言中的 struct 和 class 字段都可以使用 Table 进行存储，下面是一个 Table 结构 JSON 抽象，其中的 `ttl` 字段为设置存活时间，超过 120 秒后会被主动删除：
 
 ```json
 {

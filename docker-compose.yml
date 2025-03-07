@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   wiredb:
-    image: auula/wiredb:v1.0.0
+    image: auula/wiredb:latest
     container_name: wiredb
     ports:
       - "2668:2668"
