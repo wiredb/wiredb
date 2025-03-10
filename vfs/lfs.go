@@ -165,19 +165,21 @@ func (lfs *LogStructuredFS) DeleteSegment(key string) error {
 		return err
 	}
 
+	// 写入和更新 offset 应该是一个整体操作
 	lfs.mu.Lock()
 	err = appendToActiveRegion(lfs.active, bytes)
-	lfs.mu.Unlock()
 	if err != nil {
+		lfs.mu.Unlock()
 		return err
 	}
 
-	atomic.AddUint64(&lfs.offset, uint64(seg.Size()))
+	lfs.offset += uint64(seg.Size())
+	lfs.mu.Unlock()
 
 	inum := InodeNum(key)
 	imap := lfs.indexs[inum%uint64(indexShard)]
 	if imap == nil {
-		return fmt.Errorf("Inode index shard for %d not found", inum)
+		return fmt.Errorf("inode index shard for %d not found", inum)
 	}
 
 	imap.mu.Lock()
@@ -1122,27 +1124,27 @@ func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 						continue
 					}
 
-					if isValid(&imap.mu, segment, inode) {
+					if isValid(segment, inode) {
 						bytes, err := serializedSegment(segment)
 						if err != nil {
 							return err
 						}
 
+						// 缩小锁的颗粒度
 						lfs.mu.Lock()
 						err = appendToActiveRegion(lfs.active, bytes)
-						lfs.mu.Unlock()
 						if err != nil {
+							lfs.mu.Unlock()
 							return err
 						}
 
-						lfs.mu.Lock()
 						delete(lfs.regions, inode.RegionID)
+
+						inode.Position = lfs.offset
+						inode.RegionID = lfs.regionID
+
+						lfs.offset += uint64(segment.Size())
 						lfs.mu.Unlock()
-
-						atomic.AddUint64(&inode.Position, atomic.LoadUint64(&lfs.offset))
-						atomic.AddUint64(&inode.RegionID, atomic.LoadUint64(&lfs.regionID))
-
-						atomic.AddUint64(&lfs.offset, uint64(segment.Size()))
 
 						readOffset += uint64(segment.Size())
 					} else {
@@ -1178,9 +1180,7 @@ func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 	return nil
 }
 
-func isValid(mu *sync.RWMutex, seg *Segment, inode *Inode) bool {
-	mu.RLock()
-	defer mu.RUnlock()
+func isValid(seg *Segment, inode *Inode) bool {
 	return !seg.IsTombstone() &&
 		seg.CreatedAt == inode.CreatedAt &&
 		(seg.ExpiredAt == 0 || uint64(time.Now().Unix()) < seg.ExpiredAt)
