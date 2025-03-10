@@ -137,14 +137,14 @@ curl -X DELETE http://localhost:2668/table/key-01 -v \
 由于底层存储引擎是以 Append-Only Log 的方式将所有的操作写入到数据文件中，所以这里给出的测试用例报告，是针对的其核心文件系统 [`vfs`](./vfs/) 包的写入性能测试的结果。运行测试代码的硬件设备配置信息为（Intel i5-7360U, 8GB LPDDR3 RAM），写入基准测试结果如下：
 
 ```bash
-$: go test -benchmem -run=^$ -bench ^BenchmarkVFSWrite$ github.com/auula/wiredkv/vfs
+$: go test -benchmem -run=^$ -bench ^BenchmarkVFSWrite$ github.com/auula/wiredb/vfs
 goos: darwin
 goarch: amd64
-pkg: github.com/auula/wiredkv/vfs
+pkg: github.com/auula/wiredb/vfs
 cpu: Intel(R) Core(TM) i5-7360U CPU @ 2.30GHz
 BenchmarkVFSWrite-4   	  130216	      9682 ns/op	    1757 B/op	      44 allocs/op
 PASS
-ok  	github.com/auula/wiredkv/vfs	2.544s
+ok  	github.com/auula/wiredb/vfs	2.544s
 ```
 
 在项目根目录下有一个 [`tools.sh`](./tools.sh) 的工具脚本文件，可以快速帮助完成各项辅助工作。

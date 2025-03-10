@@ -191,36 +191,36 @@ func (lfs *LogStructuredFS) FetchSegment(key string) (uint64, *Segment, error) {
 	inum := InodeNum(key)
 	imap := lfs.indexs[inum%uint64(indexShard)]
 	if imap == nil {
-		return 0, nil, fmt.Errorf("Inode index shard for %d not found", inum)
+		return 0, nil, fmt.Errorf("inode index shard for %d not found", inum)
 	}
 
 	imap.mu.RLock()
-	Inode, ok := imap.index[inum]
+	inode, ok := imap.index[inum]
 	imap.mu.RUnlock()
 	if !ok {
-		return 0, nil, fmt.Errorf("Inode index for %d not found", inum)
+		return 0, nil, fmt.Errorf("inode index for %d not found", inum)
 	}
 
-	if atomic.LoadUint64(&Inode.ExpiredAt) <= uint64(time.Now().UnixNano()) &&
-		atomic.LoadUint64(&Inode.ExpiredAt) != 0 {
+	if atomic.LoadUint64(&inode.ExpiredAt) <= uint64(time.Now().UnixNano()) &&
+		atomic.LoadUint64(&inode.ExpiredAt) != 0 {
 		imap.mu.Lock()
 		delete(imap.index, inum)
 		imap.mu.Unlock()
-		return 0, nil, fmt.Errorf("Inode index for %d has expired", inum)
+		return 0, nil, fmt.Errorf("inode index for %d has expired", inum)
 	}
 
-	fd, ok := lfs.regions[atomic.LoadUint64(&Inode.RegionID)]
+	fd, ok := lfs.regions[atomic.LoadUint64(&inode.RegionID)]
 	if !ok {
-		return 0, nil, fmt.Errorf("data region with ID %d not found", Inode.RegionID)
+		return 0, nil, fmt.Errorf("data region with ID %d not found", inode.RegionID)
 	}
 
-	_, segment, err := readSegment(fd, atomic.LoadUint64(&Inode.Position), SEGMENT_PADDING)
+	_, segment, err := readSegment(fd, atomic.LoadUint64(&inode.Position), SEGMENT_PADDING)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to read segment: %w", err)
 	}
 
 	// Return the fetched segment and multi-version concurrency ID
-	return atomic.LoadUint64(&Inode.mvcc), segment, nil
+	return atomic.LoadUint64(&inode.mvcc), segment, nil
 }
 
 func (lfs *LogStructuredFS) KeysCount() int {
@@ -242,15 +242,15 @@ func (lfs *LogStructuredFS) UpdateSegmentWithCAS(key string, expected uint64, ne
 	inum := InodeNum(key)
 	imap := lfs.indexs[inum%uint64(indexShard)]
 	if imap == nil {
-		return fmt.Errorf("Inode index shard for %d not found", inum)
+		return fmt.Errorf("inode index shard for %d not found", inum)
 	}
 
 	// 读取 Inode 信息，使用读锁来防止并发写操作
 	imap.mu.RLock()
-	Inode, ok := imap.index[inum]
+	inode, ok := imap.index[inum]
 	imap.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("Inode index for %d not found", inum)
+		return fmt.Errorf("inode index for %d not found", inum)
 	}
 
 	bytes, err := serializedSegment(newseg)
@@ -267,13 +267,13 @@ func (lfs *LogStructuredFS) UpdateSegmentWithCAS(key string, expected uint64, ne
 	}
 
 	// MVCC: version is not modified by another thread
-	if atomic.CompareAndSwapUint64(&Inode.mvcc, expected, expected+1) {
+	if atomic.CompareAndSwapUint64(&inode.mvcc, expected, expected+1) {
 		// 一次性原子更新 Inode 指针
-		atomic.StoreUint64(&Inode.Position, atomic.LoadUint64(&lfs.offset))
-		atomic.StoreUint64(&Inode.CreatedAt, newseg.CreatedAt)
-		atomic.StoreUint64(&Inode.ExpiredAt, newseg.ExpiredAt)
-		atomic.StoreUint64(&Inode.RegionID, lfs.regionID)
-		atomic.StoreUint32(&Inode.Length, newseg.Size())
+		atomic.StoreUint64(&inode.Position, atomic.LoadUint64(&lfs.offset))
+		atomic.StoreUint64(&inode.CreatedAt, newseg.CreatedAt)
+		atomic.StoreUint64(&inode.ExpiredAt, newseg.ExpiredAt)
+		atomic.StoreUint64(&inode.RegionID, lfs.regionID)
+		atomic.StoreUint32(&inode.Length, newseg.Size())
 
 		// 使用原子操作更新 offset
 		atomic.AddUint64(&lfs.offset, uint64(newseg.Size()))
@@ -595,8 +595,8 @@ func (lfs *LogStructuredFS) ExportSnapshotIndex() error {
 	for _, imap := range lfs.indexs {
 		imap.mu.RLock()
 		defer imap.mu.RUnlock()
-		for inum, Inode := range imap.index {
-			bytes, err := serializedIndex(inum, Inode)
+		for inum, inode := range imap.index {
+			bytes, err := serializedIndex(inum, inode)
 			if err != nil {
 				return fmt.Errorf("failed to serialized index (inum: %d): %w", inum, err)
 			}
@@ -643,17 +643,17 @@ func recoveryIndex(fd *os.File, indexs []*indexMap) error {
 
 			offset += 48
 
-			inum, Inode, err := deserializedIndex(buf)
+			inum, inode, err := deserializedIndex(buf)
 			if err != nil {
 				equeue <- fmt.Errorf("failed to deserialize index (inum: %d): %w", inum, err)
 				return
 			}
 
-			if Inode.ExpiredAt <= uint64(time.Now().UnixNano()) && Inode.ExpiredAt != 0 {
+			if inode.ExpiredAt <= uint64(time.Now().UnixNano()) && inode.ExpiredAt != 0 {
 				continue
 			}
 
-			nqueue <- index{inum: inum, Inode: Inode}
+			nqueue <- index{inum: inum, Inode: inode}
 		}
 	}()
 
@@ -940,17 +940,17 @@ func formatDataFileName(number uint64) string {
 
 // serializedIndex serializes the index to a recoverable file snapshot record format:
 // | INUM 8 | RID 8  | POS 8 | LEN 4 | EAT 8 | CAT 8 | CRC32 4 |
-func serializedIndex(inum uint64, Inode *Inode) ([]byte, error) {
+func serializedIndex(inum uint64, inode *Inode) ([]byte, error) {
 	// Create a byte buffer
 	buf := new(bytes.Buffer)
 
 	// Write each field in order
 	binary.Write(buf, binary.LittleEndian, inum)
-	binary.Write(buf, binary.LittleEndian, Inode.RegionID)
-	binary.Write(buf, binary.LittleEndian, Inode.Position)
-	binary.Write(buf, binary.LittleEndian, Inode.Length)
-	binary.Write(buf, binary.LittleEndian, Inode.ExpiredAt)
-	binary.Write(buf, binary.LittleEndian, Inode.CreatedAt)
+	binary.Write(buf, binary.LittleEndian, inode.RegionID)
+	binary.Write(buf, binary.LittleEndian, inode.Position)
+	binary.Write(buf, binary.LittleEndian, inode.Length)
+	binary.Write(buf, binary.LittleEndian, inode.ExpiredAt)
+	binary.Write(buf, binary.LittleEndian, inode.CreatedAt)
 
 	// Calculate CRC32 checksum
 	checksum := crc32.ChecksumIEEE(buf.Bytes())
@@ -973,28 +973,28 @@ func deserializedIndex(data []byte) (uint64, *Inode, error) {
 	}
 
 	// Deserialize each field of Inode
-	var Inode Inode
-	err = binary.Read(buf, binary.LittleEndian, &Inode.RegionID)
+	var inode Inode
+	err = binary.Read(buf, binary.LittleEndian, &inode.RegionID)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	err = binary.Read(buf, binary.LittleEndian, &Inode.Position)
+	err = binary.Read(buf, binary.LittleEndian, &inode.Position)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	err = binary.Read(buf, binary.LittleEndian, &Inode.Length)
+	err = binary.Read(buf, binary.LittleEndian, &inode.Length)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	err = binary.Read(buf, binary.LittleEndian, &Inode.ExpiredAt)
+	err = binary.Read(buf, binary.LittleEndian, &inode.ExpiredAt)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	err = binary.Read(buf, binary.LittleEndian, &Inode.CreatedAt)
+	err = binary.Read(buf, binary.LittleEndian, &inode.CreatedAt)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -1011,7 +1011,7 @@ func deserializedIndex(data []byte) (uint64, *Inode, error) {
 		return 0, nil, fmt.Errorf("failed to crc32 checksum mismatch: %d", checksum)
 	}
 
-	return inum, &Inode, nil
+	return inum, &inode, nil
 }
 
 func serializedSegment(seg *Segment) ([]byte, error) {
@@ -1115,14 +1115,14 @@ func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 				imap := lfs.indexs[inum%uint64(indexShard)]
 				if imap != nil {
 					imap.mu.RLock()
-					Inode, ok := imap.index[inum]
+					inode, ok := imap.index[inum]
 					imap.mu.RUnlock()
 
 					if !ok {
 						continue
 					}
 
-					if isValid(&imap.mu, segment, Inode) {
+					if isValid(&imap.mu, segment, inode) {
 						bytes, err := serializedSegment(segment)
 						if err != nil {
 							return err
@@ -1136,11 +1136,11 @@ func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 						}
 
 						lfs.mu.Lock()
-						delete(lfs.regions, Inode.RegionID)
+						delete(lfs.regions, inode.RegionID)
 						lfs.mu.Unlock()
 
-						atomic.AddUint64(&Inode.Position, atomic.LoadUint64(&lfs.offset))
-						atomic.AddUint64(&Inode.RegionID, atomic.LoadUint64(&lfs.regionID))
+						atomic.AddUint64(&inode.Position, atomic.LoadUint64(&lfs.offset))
+						atomic.AddUint64(&inode.RegionID, atomic.LoadUint64(&lfs.regionID))
 
 						atomic.AddUint64(&lfs.offset, uint64(segment.Size()))
 
@@ -1178,11 +1178,11 @@ func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 	return nil
 }
 
-func isValid(mu *sync.RWMutex, seg *Segment, Inode *Inode) bool {
+func isValid(mu *sync.RWMutex, seg *Segment, inode *Inode) bool {
 	mu.RLock()
 	defer mu.RUnlock()
 	return !seg.IsTombstone() &&
-		seg.CreatedAt == Inode.CreatedAt &&
+		seg.CreatedAt == inode.CreatedAt &&
 		(seg.ExpiredAt == 0 || uint64(time.Now().Unix()) < seg.ExpiredAt)
 }
 

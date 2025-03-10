@@ -31,7 +31,7 @@ import (
 // TestSerializedIndex 测试 serializedIndex 函数
 func TestSerializedIndex(t *testing.T) {
 	// 创建一个测试的 Inode
-	Inode := &Inode{
+	inode := &Inode{
 		RegionID:  1234,
 		Position:  5678,
 		Length:    100,
@@ -43,7 +43,7 @@ func TestSerializedIndex(t *testing.T) {
 	expectedLength := 48
 
 	// 调用 serializeIndex
-	result, err := serializedIndex(1001, Inode)
+	result, err := serializedIndex(1001, inode)
 	if err != nil {
 		t.Fatalf("serialized index failed: %v", err)
 	}
@@ -64,20 +64,20 @@ func TestSerializedIndex(t *testing.T) {
 	if inum != 1001 {
 		t.Errorf("expected inum %d, got %d", 1001, inum)
 	}
-	if node.RegionID != Inode.RegionID {
-		t.Errorf("expected RegionID %d, got %d", Inode.RegionID, node.RegionID)
+	if node.RegionID != inode.RegionID {
+		t.Errorf("expected RegionID %d, got %d", inode.RegionID, node.RegionID)
 	}
-	if node.Position != Inode.Position {
-		t.Errorf("expected Offset %d, got %d", Inode.Position, node.RegionID)
+	if node.Position != inode.Position {
+		t.Errorf("expected Offset %d, got %d", inode.Position, node.RegionID)
 	}
-	if node.Length != Inode.Length {
-		t.Errorf("expected Length %d, got %d", Inode.Length, node.Length)
+	if node.Length != inode.Length {
+		t.Errorf("expected Length %d, got %d", inode.Length, node.Length)
 	}
-	if node.ExpiredAt != Inode.ExpiredAt {
-		t.Errorf("expected ExpiredAt %d, got %d", Inode.ExpiredAt, node.ExpiredAt)
+	if node.ExpiredAt != inode.ExpiredAt {
+		t.Errorf("expected ExpiredAt %d, got %d", inode.ExpiredAt, node.ExpiredAt)
 	}
-	if node.CreatedAt != Inode.CreatedAt {
-		t.Errorf("expected CreatedAt %d, got %d", Inode.CreatedAt, node.CreatedAt)
+	if node.CreatedAt != inode.CreatedAt {
+		t.Errorf("expected CreatedAt %d, got %d", inode.CreatedAt, node.CreatedAt)
 	}
 
 }
@@ -495,7 +495,7 @@ func TestVFSOpertions(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, _, err = fss.FetchSegment("key-01")
-	assert.Equal(t, err.Error(), "Inode index for 9171687345308829835 not found")
+	assert.Equal(t, err.Error(), "inode index for 9171687345308829835 not found")
 
 	err = fss.ExportSnapshotIndex()
 	assert.NoError(t, err)
