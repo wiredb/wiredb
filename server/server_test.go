@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/auula/wiredb/conf"
 	"github.com/auula/wiredb/vfs"
 	"github.com/stretchr/testify/assert"
 )
@@ -52,6 +53,7 @@ func TestHttpServer_Port(t *testing.T) {
 
 // 测试 Startup 方法（非阻塞）
 func TestHttpServer_Startup(t *testing.T) {
+	conf.Settings.Path = "./_temp/"
 	server, err := New(&Options{Port: 8081})
 
 	assert.NoError(t, err)
@@ -59,7 +61,7 @@ func TestHttpServer_Startup(t *testing.T) {
 	go func() {
 		fss, err := vfs.OpenFS(&vfs.Options{
 			FSPerm:    fs.FileMode(0755),
-			Path:      "/tmp/wiredb",
+			Path:      conf.Settings.Path,
 			Threshold: 3,
 		})
 		assert.NoError(t, err)

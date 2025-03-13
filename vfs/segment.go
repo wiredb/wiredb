@@ -118,7 +118,7 @@ func (s *Segment) IsTombstone() bool {
 
 func (s *Segment) Size() uint32 {
 	// 计算一整块记录的大小，+4 CRC 校验码占用 4 个字节
-	return 26 + s.KeySize + s.ValueSize + 4
+	return SEGMENT_PADDING + s.KeySize + s.ValueSize + 4
 }
 
 func (s *Segment) ToSet() (*types.Set, error) {

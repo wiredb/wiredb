@@ -15,6 +15,10 @@ echo ""
 
 case_num=$1
 
+sudo chmod 755 /tmp/wiredb
+sudo chown -R $(whoami) /tmp/wiredb
+
+
 if [ -z "$case_num" ]; then
     echo "Please provide an option (1, 2, 3, 4, 5, 6)."
     exit 1
