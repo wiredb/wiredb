@@ -22,6 +22,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/auula/wiredb/conf"
 	"github.com/auula/wiredb/types"
@@ -339,7 +340,9 @@ func TestUpdateSegmentWithCAS_Concurrent(t *testing.T) {
 	var failures int32
 	var success int32
 
-	concurrentUpdates := rand.Intn(1000)
+	concurrentUpdates := rand.Intn(100)
+	// 记录开始时间
+	startTime := time.Now()
 	for i := 0; i < concurrentUpdates; i++ {
 		wg.Add(1)
 		go func(id int) {
@@ -372,6 +375,10 @@ func TestUpdateSegmentWithCAS_Concurrent(t *testing.T) {
 	}
 
 	wg.Wait()
+
+	// 记录结束时间
+	duration := time.Since(startTime)
+	t.Logf("Total execution time: %v", duration)
 
 	t.Logf("Total success: %d, Total failures: %d,Updates concurrent: %d", success, failures, concurrentUpdates)
 

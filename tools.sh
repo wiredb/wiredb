@@ -15,8 +15,7 @@ echo ""
 
 case_num=$1
 
-sudo chmod 755 /tmp/wiredb
-sudo chown -R $(whoami) /tmp/wiredb
+sudo chmod -R 777 /tmp/wiredb
 
 
 if [ -z "$case_num" ]; then
