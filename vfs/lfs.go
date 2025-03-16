@@ -486,19 +486,19 @@ func (lfs *LogStructuredFS) StartRegionGC(schedule string) {
 
 // StopRegionGC 关闭垃圾回收
 func (lfs *LogStructuredFS) StopRegionGC() {
-	// 停止 cron 任务
-	if lfs.cronJob != nil {
-		lfs.cronJob.Stop()
-	}
-
 	// 如果 GC 仍在运行，等待其结束
 	for lfs.gcstate == GC_ACTIVE {
 		time.Sleep(3 * time.Second)
 	}
 
+	// 停止 cron 任务
+	if lfs.cronJob != nil {
+		lfs.cronJob.Stop()
+		lfs.cronJob = nil
+	}
+
 	// 重置状态
 	lfs.gcstate = GC_INIT
-	lfs.cronJob = nil
 }
 
 // GCState returns the current garbage collection (GC) state
