@@ -15,6 +15,8 @@ echo ""
 
 case_num=$1
 
+
+sudo mkdir -p /tmp/wiredb
 sudo chmod -R 777 /tmp/wiredb
 
 

@@ -56,7 +56,7 @@ const (
 )
 
 var (
-	indexShard       = 10
+	shard            = 10
 	fsPerm           = fs.FileMode(0755)
 	fileExtension    = ".wdb"
 	indexFileName    = "index.wdb"
@@ -120,7 +120,7 @@ func (lfs *LogStructuredFS) PutSegment(key string, seg *Segment) error {
 
 	// Select an index shard based on the hash function and update it.
 	// To avoid locking the entire index, only the relevant shard is locked.
-	imap := lfs.indexs[inum%uint64(indexShard)]
+	imap := lfs.indexs[inum%uint64(shard)]
 	imap.mu.Lock()
 	// Update the Inode metadata within a critical section.
 	imap.index[inum] = &Inode{
@@ -177,7 +177,7 @@ func (lfs *LogStructuredFS) DeleteSegment(key string) error {
 	lfs.mu.Unlock()
 
 	inum := InodeNum(key)
-	imap := lfs.indexs[inum%uint64(indexShard)]
+	imap := lfs.indexs[inum%uint64(shard)]
 	if imap == nil {
 		return fmt.Errorf("inode index shard for %d not found", inum)
 	}
@@ -191,7 +191,7 @@ func (lfs *LogStructuredFS) DeleteSegment(key string) error {
 
 func (lfs *LogStructuredFS) FetchSegment(key string) (uint64, *Segment, error) {
 	inum := InodeNum(key)
-	imap := lfs.indexs[inum%uint64(indexShard)]
+	imap := lfs.indexs[inum%uint64(shard)]
 	if imap == nil {
 		return 0, nil, fmt.Errorf("inode index shard for %d not found", inum)
 	}
@@ -242,7 +242,7 @@ func InodeNum(key string) uint64 {
 // UpdateSegmentWithCAS 通过类似于 MVCC 来实现更新操作数据一致性
 func (lfs *LogStructuredFS) UpdateSegmentWithCAS(key string, expected uint64, newseg *Segment) error {
 	inum := InodeNum(key)
-	imap := lfs.indexs[inum%uint64(indexShard)]
+	imap := lfs.indexs[inum%uint64(shard)]
 	if imap == nil {
 		return fmt.Errorf("inode index shard for %d not found", inum)
 	}
@@ -522,7 +522,7 @@ func OpenFS(opt *Options) (*LogStructuredFS, error) {
 	fsPerm = opt.FSPerm
 	instance := &LogStructuredFS{
 		mu:        sync.RWMutex{},
-		indexs:    make([]*indexMap, indexShard),
+		indexs:    make([]*indexMap, shard),
 		regions:   make(map[uint64]*os.File, 10),
 		offset:    uint64(len(dataFileMetadata)),
 		regionID:  0,
@@ -530,7 +530,7 @@ func OpenFS(opt *Options) (*LogStructuredFS, error) {
 		gcstate:   GC_INIT,
 	}
 
-	for i := 0; i < indexShard; i++ {
+	for i := 0; i < shard; i++ {
 		instance.indexs[i] = &indexMap{
 			mu:    sync.RWMutex{},
 			index: make(map[uint64]*Inode, 1e6),
@@ -672,7 +672,7 @@ func recoveryIndex(fd *os.File, indexs []*indexMap) error {
 	go func() {
 		defer wg.Done()
 		for node := range nqueue {
-			imap := indexs[node.inum%uint64(indexShard)]
+			imap := indexs[node.inum%uint64(shard)]
 			if imap != nil {
 				imap.index[node.inum] = node.Inode
 			} else {
@@ -737,7 +737,7 @@ func crashRecoveryAllIndex(regions map[uint64]*os.File, indexs []*indexMap) erro
 				return fmt.Errorf("failed to parse data file segment: %w", err)
 			}
 
-			imap := indexs[inum%uint64(indexShard)]
+			imap := indexs[inum%uint64(shard)]
 			if imap != nil {
 				if segment.IsTombstone() {
 					delete(imap.index, inum)
@@ -1123,7 +1123,7 @@ func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 					return err
 				}
 
-				imap := lfs.indexs[inum%uint64(indexShard)]
+				imap := lfs.indexs[inum%uint64(shard)]
 				if imap != nil {
 					imap.mu.RLock()
 					inode, ok := imap.index[inum]
