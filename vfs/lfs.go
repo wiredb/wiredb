@@ -364,7 +364,7 @@ func (lfs *LogStructuredFS) recoverRegions() error {
 	}
 
 	// Only find the largest file if there are more than one data files
-	if len(lfs.regions) >= 1 {
+	if len(lfs.regions) > 0 {
 		var regionIds []uint64
 		for v := range lfs.regions {
 			regionIds = append(regionIds, v)
