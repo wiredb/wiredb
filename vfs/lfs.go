@@ -641,8 +641,8 @@ func recoveryIndex(fd *os.File, indexs []*indexMap) error {
 		defer wg.Done()
 		defer close(nqueue)
 
+		buf := make([]byte, 48)
 		for offset < finfo.Size() && len(equeue) == 0 {
-			buf := make([]byte, 48)
 			_, err := fd.ReadAt(buf, offset)
 			if err != nil {
 				equeue <- fmt.Errorf("failed to read index node: %w", err)
