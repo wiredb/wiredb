@@ -508,6 +508,9 @@ func (lfs *LogStructuredFS) GCState() GC_STATE {
 }
 
 func OpenFS(opt *Options) (*LogStructuredFS, error) {
+	if opt.Threshold <= 0 {
+		return nil, fmt.Errorf("single region threshold size limit is too small")
+	}
 	// Single region max size = 255GB
 	regionThreshold = int64(opt.Threshold) * GB
 
