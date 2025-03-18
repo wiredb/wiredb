@@ -13,6 +13,9 @@ encryptor:                              # 是否开启静态数据加密功能
     secret: "your-static-data-secret!"
 compressor:                             # 是否开启静态数据压缩功能
     enable: false
+checkpoint:                             # 是否开启索引定时快照功能
+    enable: false 
+    interval: 1800                      # 每 30 分钟生成一次索引数据快照   
 allowip:                                # 白名单 IP 列表，可以去掉这个字段，去掉之后白名单就不会开启
     - 192.168.31.221
     - 192.168.101.225

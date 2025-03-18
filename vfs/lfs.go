@@ -339,7 +339,7 @@ func (lfs *LogStructuredFS) createActiveRegion() error {
 	return nil
 }
 
-func (lfs *LogStructuredFS) recoverRegions() error {
+func (lfs *LogStructuredFS) scanAndRecoverRegions() error {
 	// Single-thread recovery does not require locking
 	files, err := os.ReadDir(lfs.directory)
 	if err != nil {
@@ -417,7 +417,7 @@ func (lfs *LogStructuredFS) recoverRegions() error {
 //     from the index file.
 //  5. If no index file exists, a global scan of the data files is performed at startup
 //     to reconstruct the index file.
-func (lfs *LogStructuredFS) recoveryIndex() error {
+func (lfs *LogStructuredFS) scanAndRecoverIndexs() error {
 	// Construct the full file path
 	filePath := filepath.Join(lfs.directory, indexFileName)
 	if utils.IsExist(filePath) {
@@ -451,8 +451,12 @@ func (lfs *LogStructuredFS) SetEncryptor(encryptor Encryptor, secret []byte) err
 	return transformer.SetEncryptor(encryptor, secret)
 }
 
-// StartRegionGC 使用 robfig/cron 调度垃圾回收
-func (lfs *LogStructuredFS) StartRegionGC(schedule string) {
+func (lfs *LogStructuredFS) RunCheckpoint(second uint32) {
+
+}
+
+// RunCompactRegion 使用 robfig/cron 调度垃圾回收
+func (lfs *LogStructuredFS) RunCompactRegion(schedule string) {
 	// 确保垃圾回收处于初始状态
 	if lfs.gcstate != GC_INIT {
 		return
@@ -484,8 +488,8 @@ func (lfs *LogStructuredFS) StartRegionGC(schedule string) {
 	lfs.cronJob.Start()
 }
 
-// StopRegionGC 关闭垃圾回收
-func (lfs *LogStructuredFS) StopRegionGC() {
+// StopCompactRegion 关闭垃圾回收
+func (lfs *LogStructuredFS) StopCompactRegion() {
 	// 如果 GC 仍在运行，等待其结束
 	for lfs.gcstate == GC_ACTIVE {
 		time.Sleep(3 * time.Second)
@@ -538,12 +542,12 @@ func OpenFS(opt *Options) (*LogStructuredFS, error) {
 	}
 
 	// First, perform recovery operations on existing data files and initialize the in-memory data version number
-	err = instance.recoverRegions()
+	err = instance.scanAndRecoverRegions()
 	if err != nil {
 		return nil, fmt.Errorf("failed to recover data regions: %w", err)
 	}
 
-	err = instance.recoveryIndex()
+	err = instance.scanAndRecoverIndexs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to recover regions index: %w", err)
 	}

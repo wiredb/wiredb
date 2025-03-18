@@ -15,21 +15,23 @@ echo ""
 
 case_num=$1
 
-
-sudo mkdir -p /tmp/wiredb
-sudo chmod -R 777 /tmp/wiredb
-
-
 if [ -z "$case_num" ]; then
     echo "Please provide an option (1, 2, 3, 4, 5, 6)."
     exit 1
 fi
+
+
+sudo rm -rf /tmp/wiredb
+sudo mkdir -p /tmp/wiredb
+sudo chmod -R 777 /tmp/wiredb
 
 function test_cmd_package() {
     sudo cd cmd && go test -v
 }
 
 function test_all_packages() {
+    sudo mkdir -p /tmp/wiredb
+    sudo chmod -R 777 /tmp/wiredb
     sudo go test -vet=all -race -coverprofile=coverage.out -covermode=atomic -v ./...
 }
 

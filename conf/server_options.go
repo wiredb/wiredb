@@ -51,6 +51,10 @@ const (
 		"compressor": {
 			"enable": false
 		},
+		"checkpoint": {
+			"enable": false,
+			"interval":  1800
+		},
 		"allow_ip": null
 	}
 `
@@ -210,16 +214,24 @@ func (opt *ServerOptions) IsEncryptionEnabled() bool {
 	return opt.Encryptor.Enable
 }
 
-func (opt *ServerOptions) IsRegionGCEnabled() bool {
+func (opt *ServerOptions) IsCompactRegionEnabled() bool {
 	return opt.Region.Enable
 }
 
-func (opt *ServerOptions) RegionGCInterval() string {
+func (opt *ServerOptions) CompactRegionInterval() string {
 	return opt.Region.Schedule
 }
 
 func (opt *ServerOptions) Secret() []byte {
 	return []byte(opt.Encryptor.Secret)
+}
+
+func (opt *ServerOptions) IsCheckpointEnabled() bool {
+	return opt.Checkpoint.Enable
+}
+
+func (opt *ServerOptions) CheckpointInterval() uint32 {
+	return opt.Checkpoint.Interval
 }
 
 func toString(opt *ServerOptions) string {
@@ -236,6 +248,7 @@ type ServerOptions struct {
 	Region     Region     `json:"region"`
 	Encryptor  Encryptor  `json:"encryptor"`
 	Compressor Compressor `json:"compressor"`
+	Checkpoint Checkpoint `json:"checkpoint"`
 	AllowIP    []string   `json:"allowip"`
 }
 
@@ -252,4 +265,9 @@ type Encryptor struct {
 
 type Compressor struct {
 	Enable bool `json:"enable"`
+}
+
+type Checkpoint struct {
+	Enable   bool   `json:"enable"`
+	Interval uint32 `json:"interval"`
 }

@@ -55,8 +55,8 @@ func TestHttpServer_Port(t *testing.T) {
 func TestHttpServer_Startup(t *testing.T) {
 	conf.Settings.Path = "./_temp/"
 	server, err := New(&Options{Port: 8081})
-
 	assert.NoError(t, err)
+
 	// 启动服务器（在 goroutine 中运行）
 	go func() {
 		fss, err := vfs.OpenFS(&vfs.Options{
@@ -94,9 +94,12 @@ func TestHttpServer_SetupFS(t *testing.T) {
 
 	fss, err := vfs.OpenFS(&vfs.Options{
 		FSPerm:    fs.FileMode(0755),
-		Path:      "/tmp/wiredb",
-		Threshold: 3,
+		Path:      conf.Settings.Path,
+		Threshold: conf.Settings.Region.Threshold,
 	})
+	if err != nil {
+		assert.NoError(t, err)
+	}
 
 	assert.NotNil(t, fss)
 
@@ -118,6 +121,18 @@ func TestHttpServer_Shutdown(t *testing.T) {
 	}
 
 	assert.NotNil(t, hts)
+
+	fss, err := vfs.OpenFS(&vfs.Options{
+		FSPerm:    fs.FileMode(0755),
+		Path:      conf.Settings.Path,
+		Threshold: conf.Settings.Region.Threshold,
+	})
+
+	if err != nil {
+		assert.NoError(t, err)
+	}
+
+	hts.SetupFS(fss)
 
 	go func() {
 		err := hts.Startup()

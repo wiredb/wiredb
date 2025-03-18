@@ -480,7 +480,7 @@ func TestMarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the marshaled data is correct
-	expectedJSON := `{"port":8080,"path":"/tmp/myconfig","debug":false,"logpath":"","auth":"testpassword","region":{"enable":false,"cron":"","threshold":0},"encryptor":{"enable":false,"secret":""},"compressor":{"enable":false},"allowip":null}`
+	expectedJSON := `{"port":8080,"path":"/tmp/myconfig","debug":false,"logpath":"","auth":"testpassword","region":{"enable":false,"cron":"","threshold":0},"encryptor":{"enable":false,"secret":""},"compressor":{"enable":false},"checkpoint":{"enable":false,"interval":0},"allowip":null}`
 	assert.JSONEq(t, expectedJSON, string(data))
 }
 
@@ -520,14 +520,14 @@ func TestServerOptionsMethods(t *testing.T) {
 		assert.True(t, opt.IsEncryptionEnabled()) // Encryptor.Enable = true，应返回 true
 	})
 
-	// 3. 测试 IsRegionGCEnabled 方法
-	t.Run("Test IsRegionGCEnabled", func(t *testing.T) {
-		assert.True(t, opt.IsRegionGCEnabled()) // Region.Enable = true，应返回 true
+	// 3. 测试 IsCompactRegionEnabled 方法
+	t.Run("Test IsCompactRegionEnabled", func(t *testing.T) {
+		assert.True(t, opt.IsCompactRegionEnabled()) // Region.Enable = true，应返回 true
 	})
 
-	// 4. 测试 RegionGCInterval 方法
-	t.Run("Test RegionGCInterval", func(t *testing.T) {
-		assert.Equal(t, "0 0 3 * * *", opt.RegionGCInterval())
+	// 4. 测试 CompactRegionInterval 方法
+	t.Run("Test CompactRegionInterval", func(t *testing.T) {
+		assert.Equal(t, "0 0 3 * * *", opt.CompactRegionInterval())
 	})
 
 	// 5. 测试 Secret 方法

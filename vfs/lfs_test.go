@@ -457,6 +457,9 @@ func TestConcurrentPutAndFetchSegment(t *testing.T) {
 }
 
 func TestVFSOpertions(t *testing.T) {
+	err := os.RemoveAll(conf.Settings.Path)
+	assert.NoError(t, err)
+
 	fss, err := OpenFS(&Options{
 		FSPerm:    conf.FSPerm,
 		Path:      conf.Settings.Path,

@@ -150,14 +150,19 @@ func runServer() {
 		clog.Info("Static encryptor activated was successfully")
 	}
 
-	if conf.Settings.IsRegionGCEnabled() {
-		fss.StartRegionGC(conf.Settings.RegionGCInterval())
-		clog.Info("Region compression activated successfully")
+	if conf.Settings.IsCompactRegionEnabled() {
+		fss.RunCompactRegion(conf.Settings.CompactRegionInterval())
+		clog.Info("Regions compression activated successfully")
+	}
+
+	if conf.Settings.IsCheckpointEnabled() {
+		fss.RunCheckpoint(conf.Settings.CheckpointInterval())
+		clog.Info("Indexs checkpoint activated successfully")
 	}
 
 	if len(conf.Settings.AllowIP) > 0 {
 		hts.SetAllowIP(conf.Settings.AllowIP)
-		clog.Info("Setting whitelist IP successfully")
+		clog.Info("Setting server whitelist IP successfully")
 	}
 
 	hts.SetupFS(fss)
