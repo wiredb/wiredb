@@ -147,6 +147,8 @@ func (hs *HttpServer) Shutdown() error {
 
 func closeStorage() error {
 	if storage != nil {
+		// 先停止垃圾回收线程
+		storage.StopCompactRegion()
 		err := storage.CloseFS()
 		if err != nil {
 			return err

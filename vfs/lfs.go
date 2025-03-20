@@ -96,6 +96,7 @@ type LogStructuredFS struct {
 	active       *os.File
 	regions      map[uint64]*os.File
 	gcstate      GC_STATE
+	cond         *sync.Cond
 	cronJob      *cron.Cron
 	dirtyRegions []*os.File
 }
@@ -456,43 +457,61 @@ func (lfs *LogStructuredFS) RunCheckpoint(second uint32) {
 }
 
 // RunCompactRegion 使用 robfig/cron 调度垃圾回收
-func (lfs *LogStructuredFS) RunCompactRegion(schedule string) {
+func (lfs *LogStructuredFS) RunCompactRegion(schedule string) error {
 	// 确保垃圾回收处于初始状态
 	if lfs.gcstate != GC_INIT {
-		return
+		return fmt.Errorf("region compact process is already running: %v", lfs.gcstate)
+	}
+
+	// 如果已有 cron 任务，先停止
+	if lfs.cronJob != nil {
+		lfs.cronJob.Stop()
 	}
 
 	// 初始化 cron 任务，支持秒级调度
 	lfs.cronJob = cron.New(cron.WithSeconds())
 
 	// 添加定时任务
-	lfs.cronJob.AddFunc(schedule, func() {
-		// 如果上一次 GC 仍在运行，则跳过
-		if lfs.gcstate == GC_ACTIVE {
-			return
-		}
-
-		// 设置状态为 GC_ACTIVE
+	_, err := lfs.cronJob.AddFunc(schedule, func() {
+		lfs.mu.Lock()
 		lfs.gcstate = GC_ACTIVE
+		lfs.mu.Unlock()
+
 		err := lfs.cleanupDirtyRegions()
 		if err != nil {
-			lfs.gcstate = GC_INACTIVE
-			clog.Warnf("failed to compress dirty region: %s", err)
+			clog.Warnf("failed to compact dirty region: %v", err)
 		}
 
-		// 任务完成后设置为 GC_INACTIVE
+		lfs.mu.Lock()
 		lfs.gcstate = GC_INACTIVE
+		lfs.mu.Unlock()
+
+		// 唤醒所有等待 GC 结束的 goroutine
+		lfs.cond.Broadcast()
 	})
+
+	if err != nil {
+		return err
+	}
 
 	// 启动定时任务
 	lfs.cronJob.Start()
+
+	return nil
 }
 
 // StopCompactRegion 关闭垃圾回收
 func (lfs *LogStructuredFS) StopCompactRegion() {
-	// 如果 GC 仍在运行，等待其结束
+	// 如果 GC 仍在运行，等待其结束，30s 超时
+	timeout := time.After(30 * time.Second)
 	for lfs.gcstate == GC_ACTIVE {
-		time.Sleep(3 * time.Second)
+		select {
+		case <-timeout:
+			return
+		default:
+			// 等待 GC 任务调用 cond.Broadcast() 唤醒
+			lfs.cond.Wait()
+		}
 	}
 
 	// 停止 cron 任务
@@ -502,7 +521,9 @@ func (lfs *LogStructuredFS) StopCompactRegion() {
 	}
 
 	// 重置状态
+	lfs.mu.Lock()
 	lfs.gcstate = GC_INIT
+	lfs.mu.Unlock()
 }
 
 // GCState returns the current garbage collection (GC) state
@@ -540,6 +561,9 @@ func OpenFS(opt *Options) (*LogStructuredFS, error) {
 			index: make(map[uint64]*Inode, 1e6),
 		}
 	}
+
+	// 绑定 sync.Cond 到 mutex，用于 Region compact 状态同步
+	instance.cond = sync.NewCond(&instance.mu)
 
 	// First, perform recovery operations on existing data files and initialize the in-memory data version number
 	err = instance.scanAndRecoverRegions()
