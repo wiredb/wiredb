@@ -58,11 +58,11 @@ const (
 var (
 	shard            = 10
 	fsPerm           = fs.FileMode(0755)
+	transformer      = NewTransformer()
 	fileExtension    = ".wdb"
 	indexFileName    = "index.wdb"
 	regionThreshold  = int64(1 * GB) // 1GB
 	dataFileMetadata = []byte{0xDB, 0x00, 0x01, 0x01}
-	transformer      = NewTransformer()
 )
 
 type Options struct {
@@ -88,17 +88,17 @@ type indexMap struct {
 
 // LogStructuredFS represents the virtual file storage system.
 type LogStructuredFS struct {
-	mu           sync.RWMutex
-	offset       uint64
-	regionID     uint64
-	directory    string
-	indexs       []*indexMap
-	active       *os.File
-	regions      map[uint64]*os.File
-	gcstate      GC_STATE
-	cond         *sync.Cond
-	cronJob      *cron.Cron
-	dirtyRegions []*os.File
+	mu               sync.RWMutex
+	offset           uint64
+	regionID         uint64
+	directory        string
+	indexs           []*indexMap
+	active           *os.File
+	regions          map[uint64]*os.File
+	gcstate          GC_STATE
+	cronJob          *cron.Cron
+	dirtyRegions     []*os.File
+	checkpointWorker *time.Ticker
 }
 
 // PutSegment inserts a Segment record into the LogStructuredFS virtual file system.
@@ -453,23 +453,101 @@ func (lfs *LogStructuredFS) SetEncryptor(encryptor Encryptor, secret []byte) err
 }
 
 func (lfs *LogStructuredFS) RunCheckpoint(second uint32) {
+	lfs.mu.Lock()
+	if lfs.checkpointWorker != nil {
+		lfs.mu.Unlock()
+		return
+	}
 
+	// 设置 checkpoint 异步生成周期
+	lfs.checkpointWorker = time.NewTicker(time.Duration(second) * time.Second)
+	lfs.mu.Unlock()
+
+	go func() {
+		for range lfs.checkpointWorker.C {
+			// 只有数据文件大于 2 个，才生成快速恢复的检查点
+			if len(lfs.regions) >= 2 {
+				ckpt := checkpointFileName(lfs.regionID)
+				path := filepath.Join(lfs.directory, ckpt)
+
+				fd, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, fsPerm)
+				if err != nil {
+					clog.Errorf("failed to generate index checkpoint file: %v", err)
+					continue
+				}
+
+				// 先写入 metadata
+				n, err := fd.Write(dataFileMetadata)
+				if err != nil {
+					clog.Errorf("failed to write checkpoint file metadata: %v", err)
+					return
+				}
+				if n != len(dataFileMetadata) {
+					clog.Errorf("checkpoint file metadata write incomplete")
+					return
+				}
+
+				// 遍历 indexs 确保锁的粒度更小
+				for _, imap := range lfs.indexs {
+					imap.mu.RLock()
+					// 遍历复制的数据，进行序列化写入
+					for inum, inode := range imap.index {
+						bytes, err := serializedIndex(inum, inode)
+						if err != nil {
+							clog.Errorf("failed to serialize index (inum: %d): %v", inum, err)
+							continue
+						}
+						_, err = fd.Write(bytes)
+						if err != nil {
+							clog.Errorf("failed to write serialized index (inum: %d): %v", inum, err)
+						}
+					}
+					imap.mu.RUnlock()
+				}
+
+				// 确保文件在当前循环结束时正确刷盘关闭
+				err = utils.FlushToDisk(fd)
+				if err != nil {
+					clog.Errorf("failed to generated checkpoint file: %v", err)
+					return
+				}
+
+				clog.Infof("generated checkpoint file (%s) successfully", ckpt)
+
+				// 滚动 checkpoint 文件确保只保留 1 份快照
+				err = cleanupDirtyCheckpoint(lfs.directory, ckpt)
+				if err != nil {
+					clog.Warnf("failed to cleanup old checkpoint file: %v", err)
+				}
+
+			} else {
+				clog.Warnf("regions (%d%%) does not meet generated checkpoint status", len(lfs.regions)/10)
+			}
+		}
+	}()
+}
+
+func (lfs *LogStructuredFS) StopCheckpoint() {
+	lfs.mu.Lock()
+	defer lfs.mu.Unlock()
+
+	if lfs.checkpointWorker != nil {
+		lfs.checkpointWorker.Stop()
+		lfs.checkpointWorker = nil
+	}
 }
 
 // RunCompactRegion 使用 robfig/cron 调度垃圾回收
 func (lfs *LogStructuredFS) RunCompactRegion(schedule string) error {
-	// 确保垃圾回收处于初始状态
-	if lfs.gcstate != GC_INIT {
-		return fmt.Errorf("region compact process is already running: %v", lfs.gcstate)
+	lfs.mu.Lock()
+	if lfs.gcstate != GC_INIT || lfs.cronJob != nil {
+		lfs.mu.Unlock()
+		return fmt.Errorf("region compact is already running: %v", lfs.gcstate)
 	}
 
-	// 如果已有 cron 任务，先停止
-	if lfs.cronJob != nil {
-		lfs.cronJob.Stop()
-	}
-
-	// 初始化 cron 任务，支持秒级调度
+	// 初始化 cron 任务
 	lfs.cronJob = cron.New(cron.WithSeconds())
+	lfs.mu.Unlock()
 
 	// 添加定时任务
 	_, err := lfs.cronJob.AddFunc(schedule, func() {
@@ -485,9 +563,6 @@ func (lfs *LogStructuredFS) RunCompactRegion(schedule string) error {
 		lfs.mu.Lock()
 		lfs.gcstate = GC_INACTIVE
 		lfs.mu.Unlock()
-
-		// 唤醒所有等待 GC 结束的 goroutine
-		lfs.cond.Broadcast()
 	})
 
 	if err != nil {
@@ -496,34 +571,19 @@ func (lfs *LogStructuredFS) RunCompactRegion(schedule string) error {
 
 	// 启动定时任务
 	lfs.cronJob.Start()
-
 	return nil
 }
 
 // StopCompactRegion 关闭垃圾回收
 func (lfs *LogStructuredFS) StopCompactRegion() {
-	// 如果 GC 仍在运行，等待其结束，30s 超时
-	timeout := time.After(30 * time.Second)
-	for lfs.gcstate == GC_ACTIVE {
-		select {
-		case <-timeout:
-			return
-		default:
-			// 等待 GC 任务调用 cond.Broadcast() 唤醒
-			lfs.cond.Wait()
-		}
-	}
+	lfs.mu.Lock()
+	defer lfs.mu.Unlock()
 
-	// 停止 cron 任务
 	if lfs.cronJob != nil {
 		lfs.cronJob.Stop()
 		lfs.cronJob = nil
+		lfs.gcstate = GC_INIT
 	}
-
-	// 重置状态
-	lfs.mu.Lock()
-	lfs.gcstate = GC_INIT
-	lfs.mu.Unlock()
 }
 
 // GCState returns the current garbage collection (GC) state
@@ -546,13 +606,15 @@ func OpenFS(opt *Options) (*LogStructuredFS, error) {
 
 	fsPerm = opt.FSPerm
 	instance := &LogStructuredFS{
-		mu:        sync.RWMutex{},
-		indexs:    make([]*indexMap, shard),
-		regions:   make(map[uint64]*os.File, 10),
-		offset:    uint64(len(dataFileMetadata)),
-		regionID:  0,
-		directory: opt.Path,
-		gcstate:   GC_INIT,
+		mu:               sync.RWMutex{},
+		indexs:           make([]*indexMap, shard),
+		regions:          make(map[uint64]*os.File, 10),
+		offset:           uint64(len(dataFileMetadata)),
+		regionID:         0,
+		directory:        opt.Path,
+		gcstate:          GC_INIT,
+		cronJob:          nil,
+		checkpointWorker: nil,
 	}
 
 	for i := 0; i < shard; i++ {
@@ -561,9 +623,6 @@ func OpenFS(opt *Options) (*LogStructuredFS, error) {
 			index: make(map[uint64]*Inode, 1e6),
 		}
 	}
-
-	// 绑定 sync.Cond 到 mutex，用于 Region compact 状态同步
-	instance.cond = sync.NewCond(&instance.mu)
 
 	// First, perform recovery operations on existing data files and initialize the in-memory data version number
 	err = instance.scanAndRecoverRegions()
@@ -977,6 +1036,10 @@ func formatDataFileName(number uint64) string {
 	return fmt.Sprintf("%010d%s", number, fileExtension)
 }
 
+func checkpointFileName(regionID uint64) string {
+	return fmt.Sprintf("ckpt.%d.%d.ids", time.Now().Unix(), regionID)
+}
+
 // serializedIndex serializes the index to a recoverable file snapshot record format:
 // | INUM 8 | RID 8  | POS 8 | LEN 4 | EAT 8 | CAT 8 | CRC32 4 |
 func serializedIndex(inum uint64, inode *Inode) ([]byte, error) {
@@ -1211,7 +1274,7 @@ func (lfs *LogStructuredFS) cleanupDirtyRegions() error {
 
 		}
 	} else {
-		clog.Warnf("dirty region (%d%%) does not meet garbage collection status", len(lfs.regions)/10)
+		clog.Warnf("dirty regions (%d%%) does not meet garbage collection status", len(lfs.regions)/10)
 	}
 
 	return nil
@@ -1234,6 +1297,24 @@ func appendToActiveRegion(fd *os.File, bytes []byte) error {
 	// Check if the number of written bytes matches
 	if n != len(bytes) {
 		return fmt.Errorf("partial write error: expected %d bytes, but wrote %d bytes", len(bytes), n)
+	}
+
+	return nil
+}
+
+func cleanupDirtyCheckpoint(directory, newCheckpoint string) error {
+	files, err := filepath.Glob(filepath.Join(directory, "*.ids"))
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if filepath.Base(file) != newCheckpoint {
+			err := os.Remove(file)
+			if err != nil {
+				return fmt.Errorf("deleted old checkpoint: %s", err)
+			}
+		}
 	}
 
 	return nil
