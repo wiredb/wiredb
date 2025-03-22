@@ -437,6 +437,15 @@ func (lfs *LogStructuredFS) scanAndRecoverIndexs() error {
 		return nil
 	}
 
+	// 只有数据文件大于 2 并且有检查点文件才加快启动恢复
+	ckpts, _ := filepath.Glob(filepath.Join(lfs.directory, "*.ids"))
+	if len(lfs.regions) >= 2 && len(ckpts) > 0 {
+		err := scanAndRecoverCheckpoint(ckpts, lfs.regions, lfs.indexs)
+		if err != nil {
+			return fmt.Errorf("failed to recover data from checkpoint: %w", err)
+		}
+	}
+
 	// If the index file does not exist, recover by globally scanning the regions files
 	// If the data files are very large and numerous, recovery time increases significantly.
 	// Frequent garbage collection reduces the size of data files and speeds up startup time.
@@ -1313,6 +1322,107 @@ func cleanupDirtyCheckpoint(directory, newCheckpoint string) error {
 			err := os.Remove(file)
 			if err != nil {
 				return fmt.Errorf("deleted old checkpoint: %s", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func scanAndRecoverCheckpoint(files []string, regions map[uint64]*os.File, indexs []*indexMap) error {
+	var (
+		ckpt    int
+		path    string
+		pauseID string
+	)
+
+	for _, file := range files {
+		parts := strings.Split(file, ".")
+		if len(parts) == 4 {
+			ts, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return fmt.Errorf("failed to split checkpoint name: %w", err)
+			}
+
+			if ts > ckpt {
+				ckpt = ts
+				path = file
+				pauseID = parts[2]
+			}
+		}
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to open checkpoint file: %w", err)
+	}
+	defer file.Close()
+
+	err = recoveryIndex(file, indexs)
+	if err != nil {
+		return fmt.Errorf("failed to recover checkpoint: %w", err)
+	}
+
+	// 由于检查点不是实时的索引快照，再从检查点之后数据文件进行恢复完整数据
+	var regionIds []uint64
+	for id := range regions {
+		pid, err := strconv.Atoi(pauseID)
+		if err != nil {
+			return err
+		}
+		if id >= uint64(pid) {
+			regionIds = append(regionIds, id)
+		}
+	}
+
+	sort.Slice(regionIds, func(i, j int) bool {
+		return regionIds[i] < regionIds[j]
+	})
+
+	for _, regionId := range regionIds {
+		fd, ok := regions[uint64(regionId)]
+		if !ok {
+			return fmt.Errorf("data file does not exist regions id: %d", regionId)
+		}
+
+		finfo, err := fd.Stat()
+		if err != nil {
+			return err
+		}
+
+		offset := uint64(len(dataFileMetadata))
+
+		for offset < uint64(finfo.Size()) {
+			inum, segment, err := readSegment(fd, offset, SEGMENT_PADDING)
+			if err != nil {
+				return fmt.Errorf("failed to parse data file segment: %w", err)
+			}
+
+			imap := indexs[inum%uint64(shard)]
+			if imap != nil {
+				if segment.IsTombstone() {
+					delete(imap.index, inum)
+					offset += uint64(segment.Size())
+					continue
+				}
+
+				if segment.ExpiredAt <= uint64(time.Now().UnixNano()) && segment.ExpiredAt != 0 {
+					offset += uint64(segment.Size())
+					continue
+				}
+
+				imap.index[inum] = &Inode{
+					RegionID:  regionId,
+					Position:  offset,
+					Length:    segment.Size(),
+					CreatedAt: segment.CreatedAt,
+					ExpiredAt: segment.ExpiredAt,
+					mvcc:      0,
+				}
+
+				offset += uint64(segment.Size())
+			} else {
+				return errors.New("no corresponding index shard")
 			}
 		}
 	}
