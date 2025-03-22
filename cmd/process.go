@@ -160,7 +160,7 @@ func runServer() {
 		clog.Info("Indexs checkpoint activated successfully")
 	}
 
-	if len(conf.Settings.AllowIP) > 0 {
+	if conf.Settings.IsWhitelistIPEnabled() {
 		hts.SetAllowIP(conf.Settings.AllowIP)
 		clog.Info("Setting server whitelist IP successfully")
 	}

@@ -206,6 +206,10 @@ func (opt *ServerOptions) String() string {
 	return toString(opt)
 }
 
+func (opt *ServerOptions) IsWhitelistIPEnabled() bool {
+	return len(opt.AllowIP) > 0
+}
+
 func (opt *ServerOptions) IsCompressionEnabled() bool {
 	return opt.Compressor.Enable
 }
